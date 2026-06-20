@@ -1,0 +1,82 @@
+import { User, BloodType } from '@/types';
+
+export type CandidateDonor = User & {
+  distanceKm: number;
+  // MVP demo: no geo stored on user/request in the current types
+};
+
+export const mockCandidateDonors: CandidateDonor[] = [
+  {
+    id: 'd_jc',
+    firstName: 'Juan',
+    middleName: 'Cruz',
+    lastName: 'Cruz',
+    email: 'juan.cruz@email.com',
+    bloodType: 'A+' as BloodType,
+    birthdate: '1995-03-20',
+    weightKg: 70,
+    donorLevel: 'Hero Donor',
+    totalDonations: 6,
+    lastDonationDate: '2026-06-01',
+    profileComplete: true,
+    distanceKm: 3,
+  },
+  {
+    id: 'd_ms',
+    firstName: 'Maria',
+    middleName: 'Santos',
+    lastName: 'Santos',
+    email: 'maria.santos@email.com',
+    bloodType: 'O+' as BloodType,
+    birthdate: '1994-11-15',
+    weightKg: 62,
+    donorLevel: 'Regular Donor',
+    totalDonations: 3,
+    lastDonationDate: '2026-05-01',
+    profileComplete: true,
+    distanceKm: 5,
+  },
+  {
+    id: 'd_ak',
+    firstName: 'Arvin',
+    lastName: 'Kilala',
+    email: 'arvin.kilala@email.com',
+    bloodType: 'A-' as BloodType,
+    birthdate: '1990-08-02',
+    weightKg: 74,
+    donorLevel: 'Regular Donor',
+    totalDonations: 2,
+    lastDonationDate: '2026-05-20',
+    profileComplete: true,
+    distanceKm: 2.5,
+  },
+  {
+    id: 'd_ls',
+    firstName: 'Liza',
+    lastName: 'Solano',
+    email: 'liza.solano@email.com',
+    bloodType: 'A+' as BloodType,
+    birthdate: '1989-01-10',
+    weightKg: 60,
+    donorLevel: 'Lifesaver',
+    totalDonations: 1,
+    lastDonationDate: '2026-04-01',
+    profileComplete: true,
+    distanceKm: 8.2,
+  },
+  {
+    id: 'd_deferred',
+    firstName: 'Ren',
+    lastName: 'Dela Rosa',
+    email: 'ren.delarosa@email.com',
+    bloodType: 'A+' as BloodType,
+    birthdate: '1998-06-22',
+    weightKg: 66,
+    donorLevel: 'New Donor',
+    totalDonations: 1,
+    // Deferred (less than 84 days since lastDonationDate depending on today)
+    lastDonationDate: '2026-06-15',
+    profileComplete: true,
+    distanceKm: 1.3,
+  },
+];

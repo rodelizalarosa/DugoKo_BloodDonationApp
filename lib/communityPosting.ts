@@ -1,0 +1,212 @@
+import { BloodRequest, CommunityPost, EligibilityResult, UrgencyLevel, BloodType } from '@/types';
+
+export type TriageResult = {
+  urgencyLevel: UrgencyLevel;
+  triageLabel: string;
+  triageReason: string;
+};
+
+function normalizeDateInput(input: string): { date: Date | null; isRelative: boolean; relativeKey?: string } {
+  const raw = input.trim().toLowerCase();
+
+  if (!raw) return { date: null, isRelative: false };
+
+  // Common relative inputs
+  const rel = ['today', 'tomorrow', 'tonight', 'now'];
+  if (rel.includes(raw)) {
+    const base = new Date();
+    if (raw === 'today' || raw === 'now' || raw === 'tonight') {
+      return { date: base, isRelative: true, relativeKey: raw };
+    }
+    if (raw === 'tomorrow') {
+      const d = new Date(base);
+      d.setDate(d.getDate() + 1);
+      return { date: d, isRelative: true, relativeKey: raw };
+    }
+  }
+
+  // Try parse ISO / RFC / Date-like string
+  const parsed = new Date(input);
+  if (!Number.isNaN(parsed.getTime())) {
+    return { date: parsed, isRelative: false };
+  }
+
+  // Try parse simple YYYY-MM-DD
+  const m = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (m) {
+    const d = new Date(`${m[1]}-${m[2]}-${m[3]}T00:00:00`);
+    if (!Number.isNaN(d.getTime())) return { date: d, isRelative: false };
+  }
+
+  return { date: null, isRelative: false };
+}
+
+export function deriveTriageFromNeededWhen(neededWhenInput: string): TriageResult {
+  const parsed = normalizeDateInput(neededWhenInput);
+  const now = new Date();
+
+  const fallback: TriageResult = {
+    urgencyLevel: 'moderate',
+    triageLabel: 'Moderate urgency',
+    triageReason: 'Unable to interpret needed date; defaulting to moderate urgency.',
+  };
+
+  if (!parsed.date) return fallback;
+
+  const needed = parsed.date;
+  const diffMs = needed.getTime() - now.getTime();
+  const diffHours = diffMs / (1000 * 60 * 60);
+
+  // If needed date is in the past or within the next few hours -> critical
+  if (diffHours <= 6) {
+    return {
+      urgencyLevel: 'critical',
+      triageLabel: 'Critical — needed very soon',
+      triageReason: parsed.isRelative
+        ? 'Needed time is within the next few hours.'
+        : 'Needed date/time is within the next 6 hours.',
+    };
+  }
+
+  // Within 24 hours -> urgent
+  if (diffHours <= 24) {
+    return {
+      urgencyLevel: 'urgent',
+      triageLabel: 'Urgent — needed today/tomorrow',
+      triageReason: parsed.isRelative
+        ? 'Needed time indicates within 24 hours.'
+        : 'Needed date/time is within the next 24 hours.',
+    };
+  }
+
+  // Within ~3 days -> moderate
+  if (diffHours <= 72) {
+    return {
+      urgencyLevel: 'moderate',
+      triageLabel: 'Moderate — planned soon',
+      triageReason: 'Needed date/time is within the next 3 days.',
+    };
+  }
+
+  return {
+    urgencyLevel: 'moderate',
+    triageLabel: 'Planned — not immediately urgent',
+    triageReason: 'Needed date/time is more than 3 days away.',
+  };
+}
+
+export function coerceUnits(unitsInput: string): number | null {
+  const v = unitsInput.trim();
+  if (!v) return null;
+  const n = Number(v);
+  if (!Number.isFinite(n)) return null;
+  const int = Math.floor(n);
+  if (int <= 0) return null;
+  return int;
+}
+
+export type BloodRequestDraft = {
+  hospital: string;
+  address: string; // hospital location
+  bloodTypeNeeded: BloodType | null;
+  unitsNeeded: number | null;
+  neededWhenInput: string;
+  additionalPatientInfo?: string;
+  additionalNotes?: string;
+};
+
+export type BloodRequestFormValidation = {
+  ok: boolean;
+  errors: Partial<Record<keyof BloodRequestDraft | 'bloodTypeNeeded', string>>;
+  triage?: TriageResult;
+};
+
+export function validateBloodRequestDraft(draft: BloodRequestDraft): BloodRequestFormValidation {
+  const errors: BloodRequestFormValidation['errors'] = {};
+
+  const hospital = draft.hospital.trim();
+  const address = draft.address.trim();
+  if (!hospital) errors.hospital = 'Hospital name is required.';
+  if (!address) errors.address = 'Hospital location is required.';
+
+  if (!draft.bloodTypeNeeded) errors.bloodTypeNeeded = 'Blood type is required.';
+
+  if (!draft.unitsNeeded || draft.unitsNeeded <= 0) errors.unitsNeeded = 'Units of blood is required.';
+
+  const neededWhen = draft.neededWhenInput.trim();
+  if (!neededWhen) errors.neededWhenInput = 'When blood is needed is required (e.g., today).';
+
+  const triage = deriveTriageFromNeededWhen(neededWhen);
+  const ok = Object.keys(errors).length === 0;
+
+  return { ok, errors, triage };
+}
+
+export function validateHelperRegistration(input: {
+  fullName: string;
+  contactNumber: string;
+  redCrossConsent: boolean;
+}): { ok: boolean; errors: { [k: string]: string } } {
+  const errors: { [k: string]: string } = {};
+
+  const fullName = input.fullName.trim();
+  const contactNumber = input.contactNumber.trim();
+
+  if (!fullName) errors.fullName = 'Full name is required.';
+  if (!contactNumber) errors.contactNumber = 'Contact number is required.';
+  if (!input.redCrossConsent) errors.redCrossConsent = 'Health check consent is required.';
+
+  return { ok: Object.keys(errors).length === 0, errors };
+}
+
+export function buildLocalBloodRequestPost(params: {
+  authorName: string;
+  authorAvatarUrl?: string;
+  hospital: string;
+  address: string;
+  bloodTypeNeeded: BloodType;
+  unitsNeeded: number;
+  additionalPatientInfo?: string;
+  additionalNotes?: string;
+  triage: TriageResult;
+}): CommunityPost & { relatedRequestId?: string } {
+  const {
+    authorName,
+    authorAvatarUrl,
+    hospital,
+    address,
+    bloodTypeNeeded,
+    unitsNeeded,
+    additionalPatientInfo,
+    additionalNotes,
+    triage,
+  } = params;
+
+  const bodyParts: string[] = [];
+
+  bodyParts.push(
+    `Hospital: ${hospital} (${address})`
+  );
+  bodyParts.push(`Blood: ${bloodTypeNeeded}`);
+  bodyParts.push(`Units: ${unitsNeeded}`);
+  bodyParts.push(`Urgency: ${triage.urgencyLevel.toUpperCase()} — ${triage.triageLabel}`);
+
+  if (additionalPatientInfo?.trim()) {
+    bodyParts.push(`Patient info: ${additionalPatientInfo.trim()}`);
+  }
+  if (additionalNotes?.trim()) {
+    bodyParts.push(`Notes: ${additionalNotes.trim()}`);
+  }
+
+  const nowIso = new Date().toISOString();
+
+  return {
+    id: `p_${Math.random().toString(16).slice(2)}_${Date.now()}`,
+    type: 'request',
+    authorName,
+    authorAvatarUrl,
+    title: `${triage.urgencyLevel === 'critical' ? 'Critical' : triage.urgencyLevel === 'urgent' ? 'Urgent' : 'Request'}: ${bloodTypeNeeded} needed`,
+    body: bodyParts.join('\n'),
+    postedAt: nowIso,
+  };
+}
