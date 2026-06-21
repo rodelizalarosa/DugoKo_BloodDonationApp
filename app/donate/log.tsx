@@ -21,6 +21,7 @@ import { Card } from '@/components/ui/Card';
 import { ScreenHeader } from '@/components/ui/ScreenHeader';
 import { radius, spacing, typography } from '@/constants/theme';
 import { useTheme } from '@/context/ThemeContext';
+import { useToast } from '@/context/ToastContext';
 
 function Field({
   label,
@@ -58,6 +59,7 @@ function Field({
 export default function LogDonationScreen() {
   const router = useRouter();
   const { theme, isDarkMode } = useTheme();
+  const { showToast } = useToast();
   
   // Basic Fields
   const [date, setDate] = useState<Date | null>(null);
@@ -152,6 +154,14 @@ export default function LogDonationScreen() {
 
   function handleSave() {
     const isVerified = !!(donorId.trim() && bagRef.trim() && uploadedFile);
+
+    showToast({
+      type: 'success',
+      title: 'Donation logged!',
+      message: isVerified
+        ? 'Verified record saved. Generating your receipt…'
+        : 'Self-log saved. Pending PRC verification.',
+    });
 
     // Pass log variables to receipt screen as search parameters
     router.replace({

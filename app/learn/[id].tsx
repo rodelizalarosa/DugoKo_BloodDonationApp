@@ -1,18 +1,41 @@
 import { useLocalSearchParams } from 'expo-router';
-import React from 'react';
-import { ScrollView, StyleSheet, Text } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Badge } from '@/components/ui/Badge';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ScreenHeader } from '@/components/ui/ScreenHeader';
 import { spacing, typography } from '@/constants/theme';
 import { useTheme } from '@/context/ThemeContext';
-import { mockArticles } from '@/constants/mockData';
+import { useLearn } from '@/lib/hooks/useLearn';
+import type { LearnArticle } from '@/types';
 
 export default function ArticleDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { theme } = useTheme();
-  const article = mockArticles.find((a) => a.id === id);
+  const { fetchArticleById } = useLearn();
+  const [article, setArticle] = useState<LearnArticle | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    if (!id) return;
+    setIsLoading(true);
+    fetchArticleById(id).then((result) => {
+      setArticle(result);
+      setIsLoading(false);
+    });
+  }, [id, fetchArticleById]);
+
+  if (isLoading) {
+    return (
+      <SafeAreaView style={[styles.safe, { backgroundColor: theme.paper }]} edges={['top']}>
+        <ScreenHeader title="Learn" />
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <ActivityIndicator size="large" color={theme.crimson} />
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   if (!article) {
     return (
@@ -45,3 +68,4 @@ const styles = StyleSheet.create({
   readTime: { ...typography.caption, marginTop: spacing.xs },
   body: { ...typography.body, marginTop: spacing.lg, lineHeight: 22 },
 });
+

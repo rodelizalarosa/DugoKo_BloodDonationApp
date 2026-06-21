@@ -2,7 +2,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Award, ShieldCheck, Clock } from 'lucide-react-native';
 import React from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -11,12 +11,15 @@ import { Card } from '@/components/ui/Card';
 import { ScreenHeader } from '@/components/ui/ScreenHeader';
 import { radius, spacing, typography } from '@/constants/theme';
 import { useTheme } from '@/context/ThemeContext';
-import { mockDonations, mockUser } from '@/constants/mockData';
+import { useProfile } from '@/lib/hooks/useProfile';
+import { useDonations } from '@/lib/hooks/useDonations';
 import { calculateEligibility, formatDate } from '@/lib/eligibility';
 
 export default function ReceiptScreen() {
   const router = useRouter();
   const { theme } = useTheme();
+  const { profile } = useProfile();
+  const { donations } = useDonations();
   
   const {
     id,
@@ -48,7 +51,7 @@ export default function ReceiptScreen() {
   const donation = date
     ? {
         id: id || 'new-log',
-        userId: 'u1',
+        userId: profile?.id || '',
         date,
         venue,
         branch,
@@ -59,10 +62,22 @@ export default function ReceiptScreen() {
         notes,
       }
     : id
-    ? mockDonations.find((d) => d.id === id) || mockDonations[mockDonations.length - 1]
-    : mockDonations[mockDonations.length - 1];
+    ? donations.find((d) => d.id === id) || donations[donations.length - 1]
+    : donations[donations.length - 1];
+
+  if (!donation) {
+    return (
+      <SafeAreaView style={[styles.safe, { backgroundColor: theme.paper }]} edges={['top']}>
+        <ScreenHeader title="Donation Receipt" subtitle="Your proof and personal record" />
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+          <Text style={{ color: theme.inkMuted, textAlign: 'center' }}>No donation record found. Log your first donation to see your receipt.</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   const eligibility = calculateEligibility(donation.date);
+
 
   const handleBack = () => {
     if (router.canGoBack()) {
@@ -73,7 +88,7 @@ export default function ReceiptScreen() {
   };
 
   const isVerifiedRecord = !date || isVerified === 'true';
-  const resolvedDonorId = date ? donorId : 'PRC-09-88123';
+  const resolvedDonorId = date ? (donorId ?? null) : 'PRC-09-88123';
   const backLabel = id ? 'Back to History' : 'Back to Donate';
 
   return (
@@ -111,8 +126,8 @@ export default function ReceiptScreen() {
             </View>
           )}
 
-          <Row label="Name" value={`${mockUser.firstName} ${mockUser.lastName}`} />
-          <Row label="Blood Type" value={mockUser.bloodType ?? '—'} />
+          <Row label="Name" value={profile ? `${profile.firstName} ${profile.lastName}` : '—'} />
+          <Row label="Blood Type" value={profile?.bloodType ?? '—'} />
           <Divider />
           <Row label="Date" value={formatDate(donation.date || null)} />
           <Row label="Venue" value={donation.venue || ''} />
@@ -148,8 +163,8 @@ export default function ReceiptScreen() {
             variant="outline"
             onPress={async () => {
               const html = buildReceiptHtml({
-                donorName: `${mockUser.firstName} ${mockUser.lastName}`,
-                bloodType: mockUser.bloodType ?? '—',
+                donorName: profile ? `${profile.firstName} ${profile.lastName}` : '—',
+                bloodType: profile?.bloodType ?? '—',
                 donationDate: formatDate(donation.date || null),
                 venue: donation.venue || '',
                 branch: donation.branch || '',
@@ -169,8 +184,8 @@ export default function ReceiptScreen() {
             variant="outline"
             onPress={async () => {
               const html = buildReceiptHtml({
-                donorName: `${mockUser.firstName} ${mockUser.lastName}`,
-                bloodType: mockUser.bloodType ?? '—',
+                donorName: profile ? `${profile.firstName} ${profile.lastName}` : '—',
+                bloodType: profile?.bloodType ?? '—',
                 donationDate: formatDate(donation.date || null),
                 venue: donation.venue || '',
                 branch: donation.branch || '',
@@ -201,8 +216,8 @@ export default function ReceiptScreen() {
             variant="outline"
             onPress={async () => {
               const message = [
-                `Donation receipt for ${mockUser.firstName} ${mockUser.lastName}`,
-                `Blood Type: ${mockUser.bloodType ?? '—'}`,
+                `Donation receipt for ${profile ? `${profile.firstName} ${profile.lastName}` : '—'}`,
+                `Blood Type: ${profile?.bloodType ?? '—'}`,
                 `Date: ${formatDate(donation.date || null)}`,
                 `Venue: ${donation.venue || ''}`,
                 `Branch: ${donation.branch || ''}`,

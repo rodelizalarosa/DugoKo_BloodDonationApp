@@ -7,11 +7,13 @@ import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
 import { radius, spacing, typography } from '@/constants/theme';
 import { useTheme } from '@/context/ThemeContext';
-import { mockCommunityPosts, mockUser } from '@/constants/mockData';
 import { CommunityPost } from '@/types';
 import { calculateEligibility } from '@/lib/eligibility';
 import { BloodRequestCreateModal } from '@/components/community/BloodRequestCreateModal';
 import { HelperRegistrationModal } from '@/components/community/HelperRegistrationModal';
+import { useProfile } from '@/lib/hooks/useProfile';
+import { useCommunity } from '@/lib/hooks/useCommunity';
+import { useToast } from '@/context/ToastContext';
 
 const typeMeta: Record<CommunityPost['type'], { icon: any; tone: 'crimson' | 'teal' | 'amber'; label: string }> = {
   request: { icon: Siren, tone: 'crimson', label: 'Blood Request' },
@@ -24,15 +26,19 @@ export default function CommunityScreen() {
   const { theme } = useTheme();
   const [timeFilter, setTimeFilter] = React.useState<'all' | 'today' | 'week' | 'month'>('all');
 
-  // Posting eligibility (MVP: based on mockUser donate eligibility rules)
-  const eligibility = calculateEligibility(mockUser.lastDonationDate);
+  const { profile } = useProfile();
+  const { posts, createBloodRequest } = useCommunity();
+  const { showToast } = useToast();
+
+  // Posting eligibility — safe-guard when profile is still loading
+  const eligibility = calculateEligibility(profile?.lastDonationDate ?? null);
 
   const mappedStatus: 'eligible' | 'deferred' | 'not_eligible' =
     eligibility.status === 'eligible' ? 'eligible' : eligibility.status === 'deferred' ? 'deferred' : 'not_eligible';
 
   const requesterEligibility = {
     status:
-      mockUser.profileComplete && mockUser.totalDonations > 0 ? mappedStatus : 'not_eligible',
+      profile?.profileComplete && (profile?.totalDonations ?? 0) > 0 ? mappedStatus : 'not_eligible',
     daysRemaining: eligibility.daysRemaining,
   } as const;
 
@@ -50,7 +56,7 @@ export default function CommunityScreen() {
     month: 'This Month',
   };
 
-  const sortedPosts = [...mockCommunityPosts]
+  const sortedPosts = [...posts]
     .filter((post) => {
       if (timeFilter === 'all') return true;
       const postDate = new Date(post.postedAt).getTime();
@@ -138,10 +144,25 @@ export default function CommunityScreen() {
           visible={showBloodRequestModal}
           onClose={() => setShowBloodRequestModal(false)}
           requesterEligibility={requesterEligibility}
-          onSubmitted={(payload) => {
-            // MVP: only show confirmation; actual posting persistence is out of scope
+          onSubmitted={async (payload) => {
+            const { error } = await createBloodRequest(
+              payload.hospital,
+              payload.address,
+              payload.bloodTypeNeeded,
+              payload.unitsNeeded,
+              payload.triageUrgencyLevel,
+              payload.body
+            );
+            if (error) {
+              showToast({ type: 'error', title: 'Post failed', message: error });
+            } else {
+              showToast({
+                type: 'success',
+                title: 'Blood request posted!',
+                message: 'Your request is now visible to the community.',
+              });
+            }
             setShowBloodRequestModal(false);
-            router.push('/(tabs)/community');
           }}
         />
 

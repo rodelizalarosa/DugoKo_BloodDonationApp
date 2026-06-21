@@ -1,7 +1,7 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { CalendarDays, Clock, MapPin, Users, CheckCircle2, Navigation } from 'lucide-react-native';
-import React, { useMemo, useState } from 'react';
-import MapView, { Marker } from 'react-native-maps';
+import { CalendarDays, Clock, MapPin, Users, CheckCircle2 } from 'lucide-react-native';
+import React, { useEffect, useState } from 'react';
+import Map from '@/components/ui/Map';
 import {
   ScrollView,
   StyleSheet,
@@ -21,16 +21,34 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { ScreenHeader } from '@/components/ui/ScreenHeader';
 import { spacing, typography, radius } from '@/constants/theme';
 import { useTheme } from '@/context/ThemeContext';
-import { mockEvents, mockUser } from '@/constants/mockData';
+import { useCentersAndEvents } from '@/lib/hooks/useCentersAndEvents';
+import { useProfile } from '@/lib/hooks/useProfile';
+import { useToast } from '@/context/ToastContext';
 
 export default function EventDetailsScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { theme, isDarkMode } = useTheme();
-  
-  const event = mockEvents.find((e) => e.id === id);
+  const { events, isLoading: eventsLoading, rsvpEvent, getUserRsvp } = useCentersAndEvents();
+  const { profile } = useProfile();
+  const { showToast } = useToast();
+
+  const event = events.find((e) => e.id === id);
   const [rsvped, setRsvped] = useState(false);
-  const [localSlots, setLocalSlots] = useState(event ? event.slotsAvailable : 0);
+  const [localSlots, setLocalSlots] = useState(0);
+
+  // Check if user already RSVP'd
+  useEffect(() => {
+    if (!id) return;
+    getUserRsvp(id).then((rsvp) => {
+      if (rsvp) setRsvped(true);
+    });
+  }, [id, getUserRsvp]);
+
+  // Sync localSlots when event loads
+  useEffect(() => {
+    if (event) setLocalSlots(event.slotsAvailable);
+  }, [event?.id, event?.slotsAvailable]);
   
   // Registration Form States
   const [showRegModal, setShowRegModal] = useState(false);
@@ -45,6 +63,17 @@ export default function EventDetailsScreen() {
   const [declConsent, setDeclConsent] = useState(false);
 
   const [ticketRef, setTicketRef] = useState('');
+
+  if (eventsLoading) {
+    return (
+      <SafeAreaView style={[styles.safe, { backgroundColor: theme.paper }]}>
+        <ScreenHeader title="Event Details" />
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <ActivityIndicator size="large" color={theme.crimson} />
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   if (!event) {
     return (
@@ -82,15 +111,24 @@ export default function EventDetailsScreen() {
     });
   };
 
-  const handleRegister = () => {
+  const handleRegister = async () => {
+    if (!event) return;
     setIsSubmitting(true);
-    // Simulate sending email verification to Philippine Red Cross (PRC Cebu)
-    setTimeout(() => {
-      setIsSubmitting(false);
+    // Persist RSVP to Supabase
+    const { error } = await rsvpEvent(event.id, 'going', selectedTimeSlot);
+    setIsSubmitting(false);
+    if (!error) {
       setIsSuccess(true);
       setTicketRef(`TCK-${Math.floor(100000 + Math.random() * 900000)}`);
       setLocalSlots((prev) => Math.max(0, prev - 1));
-    }, 2000);
+      showToast({
+        type: 'success',
+        title: 'Slot confirmed!',
+        message: `You're registered for ${event.title}.`,
+      });
+    } else {
+      showToast({ type: 'error', title: 'RSVP failed', message: error });
+    }
   };
 
   const closeSuccess = () => {
@@ -120,24 +158,21 @@ export default function EventDetailsScreen() {
           typeof event.longitude === 'number' &&
           !Number.isNaN(event.latitude) &&
           !Number.isNaN(event.longitude) ? (
-            <MapView
+            <Map
               style={styles.mapView}
-              initialRegion={{
-                latitude: event.latitude,
-                longitude: event.longitude,
-                latitudeDelta: 0.05,
-                longitudeDelta: 0.05,
-              }}
-              showsUserLocation={false}
-              scrollEnabled
-              zoomEnabled
-            >
-              <Marker
-                coordinate={{ latitude: event.latitude, longitude: event.longitude }}
-                title={event.title}
-                description={event.venue}
-              />
-            </MapView>
+              centerLatitude={event.latitude}
+              centerLongitude={event.longitude}
+              zoom={13}
+              markers={[
+                {
+                  id: event.id,
+                  latitude: event.latitude,
+                  longitude: event.longitude,
+                  title: event.title,
+                  description: event.venue,
+                },
+              ]}
+            />
           ) : (
             <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
               <Text style={{ color: theme.inkMuted }}>Map unavailable</Text>
@@ -209,8 +244,8 @@ export default function EventDetailsScreen() {
                   <View style={styles.ticketDivider} />
                   
                   <TicketRow label="Ticket Ref" value={ticketRef} highlight />
-                  <TicketRow label="Donor Name" value={`${mockUser.firstName} ${mockUser.lastName}`} />
-                  <TicketRow label="Blood Type" value={mockUser.bloodType || '—'} />
+                  <TicketRow label="Donor Name" value={profile ? `${profile.firstName} ${profile.lastName}` : '—'} />
+                  <TicketRow label="Blood Type" value={profile?.bloodType || '—'} />
                   <TicketRow label="Event Name" value={event.title} />
                   <TicketRow label="Venue" value={event.venue} />
                   <TicketRow label="Time Window" value={selectedTimeSlot} />
@@ -246,9 +281,9 @@ export default function EventDetailsScreen() {
                 <Text style={[styles.label, { color: theme.ink }]}>Donor Profile (Prefilled)</Text>
                 <Card style={styles.prefilledCard}>
                   <Text style={[styles.prefilledText, { color: theme.ink }]}>
-                    {mockUser.firstName} {mockUser.lastName} ({mockUser.bloodType || 'Blood Type Unspecified'})
+                    {profile ? `${profile.firstName} ${profile.lastName}` : '—'} ({profile?.bloodType || 'Blood Type Unspecified'})
                   </Text>
-                  <Text style={[styles.prefilledEmail, { color: theme.inkMuted }]}>{mockUser.email}</Text>
+                  <Text style={[styles.prefilledEmail, { color: theme.inkMuted }]}>{profile?.email || '—'}</Text>
                 </Card>
 
                 {/* Contact Number */}

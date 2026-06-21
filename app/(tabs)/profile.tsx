@@ -1,12 +1,11 @@
 import { useRouter } from 'expo-router';
 import { Award, ChevronRight, Clock, FileText, LogOut, Settings, UserCog, Camera, Trash2, X } from 'lucide-react-native';
 import React, { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View, Modal, TouchableOpacity } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View, Modal, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Card } from '@/components/ui/Card';
 import { radius, spacing, typography } from '@/constants/theme';
 import { useTheme } from '@/context/ThemeContext';
-import { mockUser } from '@/constants/mockData';
 
 const menu = [
   { key: 'edit', label: 'Edit Profile', icon: UserCog, href: '/profile/edit' as const },
@@ -22,13 +21,43 @@ const donorLevels = [
   { level: 'Lifesaver', requirement: '10+ donations', color: '#D69E2E' },
 ];
 
+import { useProfile } from '@/lib/hooks/useProfile';
+import { useAuth } from '@/context/AuthContext';
+
 export default function ProfileScreen() {
   const router = useRouter();
   const { theme, isDarkMode } = useTheme();
+  const { profile, isLoading } = useProfile();
+  const { signOut } = useAuth();
   const [showLevelModal, setShowLevelModal] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
 
-  const fullName = `${mockUser.firstName} ${mockUser.lastName}`;
+  // ── Loading state ──────────────────────────────────────────────
+  if (isLoading) {
+    return (
+      <SafeAreaView style={[styles.safe, { backgroundColor: theme.paper }]} edges={['top']}>
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+          <ActivityIndicator size="large" color={theme.crimson} />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // ── No profile yet (trigger may not have fired) ────────────────
+  if (!profile) {
+    return (
+      <SafeAreaView style={[styles.safe, { backgroundColor: theme.paper }]} edges={['top']}>
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.xl }}>
+          <Text style={[typography.h2, { color: theme.ink, textAlign: 'center' }]}>Profile not ready yet</Text>
+          <Text style={[typography.body, { color: theme.inkMuted, textAlign: 'center', marginTop: spacing.sm }]}>
+            Your profile is being set up. Please wait a moment and try again.
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  const fullName = `${profile.firstName} ${profile.lastName}`.trim();
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.paper }]} edges={['top']}>
@@ -36,7 +65,7 @@ export default function ProfileScreen() {
         <View style={styles.avatarWrap}>
           <View style={styles.avatarContainer}>
             <View style={[styles.avatar, { backgroundColor: theme.crimson }]}>
-              <Text style={[styles.avatarInitial, { color: theme.surface }]}>{mockUser.firstName.charAt(0)}</Text>
+              <Text style={[styles.avatarInitial, { color: theme.surface }]}>{profile.firstName.charAt(0).toUpperCase()}</Text>
             </View>
             <View style={styles.avatarActions}>
               <TouchableOpacity style={[styles.avatarActionBtn, { backgroundColor: theme.surface }]}>
@@ -47,22 +76,22 @@ export default function ProfileScreen() {
               </TouchableOpacity>
             </View>
           </View>
-          
+
           <Text style={[styles.name, { color: theme.ink }]}>{fullName}</Text>
-          
-          <Pressable 
-            style={[styles.levelRow, { backgroundColor: isDarkMode ? 'rgba(179, 18, 42, 0.2)' : 'rgba(179, 18, 42, 0.05)' }]} 
+
+          <Pressable
+            style={[styles.levelRow, { backgroundColor: isDarkMode ? 'rgba(179, 18, 42, 0.2)' : 'rgba(179, 18, 42, 0.05)' }]}
             onPress={() => setShowLevelModal(true)}
           >
             <Award size={16} color={theme.crimson} />
-            <Text style={[styles.level, { color: theme.crimson }]}>{mockUser.donorLevel}</Text>
+            <Text style={[styles.level, { color: theme.crimson }]}>{profile.donorLevel}</Text>
             <ChevronRight size={14} color={theme.crimson} />
           </Pressable>
         </View>
 
         <View style={styles.statRow}>
-          <Stat label="Blood Type" value={mockUser.bloodType ?? '—'} />
-          <Stat label="Donations" value={`${mockUser.totalDonations}`} />
+          <Stat label="Blood Type" value={profile.bloodType ?? '—'} />
+          <Stat label="Donations" value={`${profile.totalDonations}`} />
           <Stat label="Goal" value="Next: 10" />
         </View>
 
@@ -101,12 +130,12 @@ export default function ProfileScreen() {
               <ScrollView>
                 <View style={styles.levelList}>
                   {donorLevels.map((dl) => (
-                    <View 
-                      key={dl.level} 
+                    <View
+                      key={dl.level}
                       style={[
-                        styles.levelItem, 
+                        styles.levelItem,
                         { borderColor: theme.border },
-                        mockUser.donorLevel === dl.level && { borderColor: theme.crimson, backgroundColor: isDarkMode ? 'rgba(179, 18, 42, 0.1)' : 'rgba(179, 18, 42, 0.05)' }
+                        profile.donorLevel === dl.level && { borderColor: theme.crimson, backgroundColor: isDarkMode ? 'rgba(179, 18, 42, 0.1)' : 'rgba(179, 18, 42, 0.05)' },
                       ]}
                     >
                       <View style={[styles.levelBadge, { backgroundColor: dl.color }]}>
@@ -116,7 +145,7 @@ export default function ProfileScreen() {
                         <Text style={[styles.levelName, { color: theme.ink }]}>{dl.level}</Text>
                         <Text style={[styles.levelReq, { color: theme.inkMuted }]}>{dl.requirement}</Text>
                       </View>
-                      {mockUser.donorLevel === dl.level && (
+                      {profile.donorLevel === dl.level && (
                         <View style={[styles.activeBadge, { backgroundColor: theme.crimson }]}>
                           <Text style={styles.activeText}>Current</Text>
                         </View>
@@ -153,9 +182,9 @@ export default function ProfileScreen() {
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                  onPress={() => {
+                  onPress={async () => {
                     setShowLogoutModal(false);
-                    router.replace('/auth/login');
+                    await signOut();
                   }}
                   style={[styles.logoutBtn, styles.logoutBtnPrimary, { backgroundColor: theme.crimson }]}
                 >

@@ -8,12 +8,12 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { ScreenHeader } from '@/components/ui/ScreenHeader';
 import { spacing, typography } from '@/constants/theme';
 import { useTheme } from '@/context/ThemeContext';
-import { mockDonations } from '@/constants/mockData';
 import { formatDate } from '@/lib/eligibility';
+import { useDonations } from '@/lib/hooks/useDonations';
 
 export default function DonationHistoryScreen() {
   const router = useRouter();
-  const donations = mockDonations.slice().reverse();
+  const { donations } = useDonations();
   const { theme } = useTheme();
 
   return (

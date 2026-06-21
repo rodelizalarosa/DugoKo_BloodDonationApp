@@ -5,12 +5,19 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Card } from '@/components/ui/Card';
 import { ScreenHeader } from '@/components/ui/ScreenHeader';
 import { radius, spacing, typography } from '@/constants/theme';
-import { mockDonations, mockInsight } from '@/constants/mockData';
+import { mockInsight, mockDonations } from '@/constants/mockData';
 import { formatDate } from '@/lib/eligibility';
 import { useTheme } from '@/context/ThemeContext';
+import { useDonorInsights } from '@/lib/hooks/useDonorInsights';
+import { useDonations } from '@/lib/hooks/useDonations';
 
 export default function InsightDetailScreen() {
   const { theme } = useTheme();
+  const { insights } = useDonorInsights();
+  const { donations } = useDonations();
+
+  const currentInsight = insights || mockInsight;
+  const historyList = donations.length > 0 ? donations : mockDonations;
 
   const mockQuotes = [
     "Your blood is a gift of life. Every drop counts toward someone's tomorrow.",
@@ -35,9 +42,9 @@ export default function InsightDetailScreen() {
         </View>
 
         <View style={styles.statRow}>
-          <Stat label="Total Donations" value={`${mockInsight.totalDonations}`} theme={theme} />
-          <Stat label="Lives Impacted" value={`~${mockInsight.estimatedLivesImpacted}`} theme={theme} />
-          <Stat label="Streak" value={`${mockInsight.donationStreak}`} theme={theme} />
+          <Stat label="Total Donations" value={`${currentInsight.totalDonations}`} theme={theme} />
+          <Stat label="Lives Impacted" value={`~${currentInsight.estimatedLivesImpacted}`} theme={theme} />
+          <Stat label="Streak" value={`${currentInsight.donationStreak}`} theme={theme} />
         </View>
 
         <Text style={[styles.sectionLabel, { color: theme.ink }]}>AI Health Impact Analysis</Text>
@@ -53,11 +60,11 @@ export default function InsightDetailScreen() {
 
         <Card style={{ marginTop: spacing.lg }}>
           <Text style={[styles.subLabel, { color: theme.inkMuted }]}>Next Suggested Window</Text>
-          <Text style={[styles.body, { color: theme.teal }]}>{formatDate(mockInsight.nextWindowDate)}</Text>
+          <Text style={[styles.body, { color: theme.teal }]}>{formatDate(currentInsight.nextWindowDate)}</Text>
         </Card>
 
         <Text style={[styles.sectionLabel, { color: theme.ink }]}>Donation history</Text>
-        {mockDonations
+        {historyList
           .slice()
           .reverse()
           .map((d) => (

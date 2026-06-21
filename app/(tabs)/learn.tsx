@@ -6,11 +6,12 @@ import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
 import { spacing, typography } from '@/constants/theme';
 import { useTheme } from '@/context/ThemeContext';
-import { mockArticles } from '@/constants/mockData';
+import { useLearn } from '@/lib/hooks/useLearn';
 
 export default function LearnScreen() {
   const router = useRouter();
   const { theme } = useTheme();
+  const { articles } = useLearn();
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.paper }]} edges={['top']}>
@@ -18,7 +19,7 @@ export default function LearnScreen() {
         <Text style={[styles.heading, { color: theme.ink }]}>Learn</Text>
         <Text style={[styles.subheading, { color: theme.inkMuted }]}>Trusted, bite-sized info on blood donation</Text>
 
-        {mockArticles.map((a) => (
+        {articles.map((a) => (
           <Pressable key={a.id} onPress={() => router.push(`/learn/${a.id}`)}>
             <Card style={styles.card}>
               <Text style={styles.emoji}>{a.coverEmoji}</Text>

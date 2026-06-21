@@ -6,7 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Card } from '@/components/ui/Card';
 import { radius, spacing, typography } from '@/constants/theme';
 import { useTheme } from '@/context/ThemeContext';
-import { mockEvents } from '@/constants/mockData';
+import { useCentersAndEvents } from '@/lib/hooks/useCentersAndEvents';
 
 const actions = [
   {
@@ -49,6 +49,7 @@ const actions = [
 export default function DonateScreen() {
   const router = useRouter();
   const { theme } = useTheme();
+  const { events } = useCentersAndEvents();
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.paper }]} edges={['top']}>
@@ -71,7 +72,7 @@ export default function DonateScreen() {
         ))}
 
         <Text style={[styles.sectionLabel, { color: theme.ink }]}>Nearby Drives</Text>
-        {mockEvents.map((e) => (
+        {events.map((e) => (
           <Pressable key={e.id} onPress={() => router.push(`/donate/events/${e.id}`)}>
             <Card style={styles.eventCard}>
               <Text style={[styles.eventTitle, { color: theme.ink }]}>{e.title}</Text>

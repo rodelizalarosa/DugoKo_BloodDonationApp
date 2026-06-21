@@ -1,14 +1,14 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Megaphone, MessageSquareHeart, Siren } from 'lucide-react-native';
 import React from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
 import { ScreenHeader } from '@/components/ui/ScreenHeader';
 import { spacing, typography } from '@/constants/theme';
 import { useTheme } from '@/context/ThemeContext';
-import { mockCommunityPosts } from '@/constants/mockData';
+import { useCommunity } from '@/lib/hooks/useCommunity';
 import { CommunityPost } from '@/types';
 
 const typeMeta: Record<CommunityPost['type'], { icon: any; tone: 'crimson' | 'teal' | 'amber'; label: string }> = {
@@ -21,9 +21,10 @@ export default function CategoryScreen() {
   const { type } = useLocalSearchParams<{ type: CommunityPost['type'] }>();
   const router = useRouter();
   const { theme } = useTheme();
+  const { posts, isLoading } = useCommunity();
 
   const meta = typeMeta[type] || typeMeta.request;
-  const filteredPosts = mockCommunityPosts
+  const filteredPosts = posts
     .filter((post) => post.type === type)
     .sort((a, b) => new Date(b.postedAt).getTime() - new Date(a.postedAt).getTime());
 
@@ -34,29 +35,33 @@ export default function CategoryScreen() {
         subtitle={`Viewing all ${meta.label.toLowerCase()}`}
       />
       <ScrollView contentContainerStyle={styles.content}>
-        {filteredPosts.length === 0 ? (
+        {isLoading && (
+          <View style={styles.empty}>
+            <ActivityIndicator color={theme.crimson} />
+          </View>
+        )}
+        {!isLoading && filteredPosts.length === 0 && (
           <View style={styles.empty}>
             <Text style={[styles.emptyText, { color: theme.inkMuted }]}>No posts in this category yet.</Text>
           </View>
-        ) : (
-          filteredPosts.map((post) => (
-            <Pressable key={post.id} onPress={() => router.push(`/community/${post.id}`)}>
-              <Card style={{ gap: spacing.xs }}>
-                <View style={styles.row}>
-                  <meta.icon size={18} color={theme.ink} />
-                  <Badge label={meta.label.slice(0, -1)} tone={meta.tone} />
-                </View>
-                <Text style={[styles.title, { color: theme.ink }]}>{post.title}</Text>
-                <Text style={[styles.body, { color: theme.inkMuted }]}>
-                  {post.body}
-                </Text>
-                <Text style={[styles.author, { color: theme.inkFaint }]}>
-                  {post.authorName} · {timeAgo(post.postedAt)}
-                </Text>
-              </Card>
-            </Pressable>
-          ))
         )}
+        {!isLoading && filteredPosts.map((post) => (
+          <Pressable key={post.id} onPress={() => router.push(`/community/${post.id}`)}>
+            <Card style={{ gap: spacing.xs }}>
+              <View style={styles.row}>
+                <meta.icon size={18} color={theme.ink} />
+                <Badge label={meta.label.slice(0, -1)} tone={meta.tone} />
+              </View>
+              <Text style={[styles.title, { color: theme.ink }]}>{post.title}</Text>
+              <Text style={[styles.body, { color: theme.inkMuted }]}>
+                {post.body}
+              </Text>
+              <Text style={[styles.author, { color: theme.inkFaint }]}>
+                {post.authorName} · {timeAgo(post.postedAt)}
+              </Text>
+            </Card>
+          </Pressable>
+        ))}
       </ScrollView>
     </SafeAreaView>
   );

@@ -6,30 +6,33 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { AskDonaFAB } from '@/components/home/AskDonaFAB';
 import { EligibilityCard } from '@/components/home/EligibilityCard';
 import { GreetingCard } from '@/components/home/GreetingCard';
-import { InsightCard } from '@/components/home/InsightCard';
 import { NotificationModal } from '@/components/home/NotificationModal';
 import { UpcomingEventCard } from '@/components/home/UpcomingEventCard';
 import { UrgentRequestCard } from '@/components/home/UrgentRequestCard';
-import { radius, spacing, typography } from '@/constants/theme';
-import { mockEvents, mockInsight, mockNotifications, mockRequests, mockUser } from '@/constants/mockData';
-import { mockCandidateDonors } from '@/constants/mockCandidateDonors';
+import { spacing, typography } from '@/constants/theme';
 import { getRecommendedDonors } from '@/lib/smartBloodMatching';
 import { useTheme } from '@/context/ThemeContext';
+import { useProfile } from '@/lib/hooks/useProfile';
+import { useCentersAndEvents } from '@/lib/hooks/useCentersAndEvents';
+import { useCommunity } from '@/lib/hooks/useCommunity';
 
 export default function HomeScreen() {
   const router = useRouter();
   const { isDarkMode, theme, toggleTheme } = useTheme();
   const [showNotifications, setShowNotifications] = React.useState(false);
-  
-  const urgentRequest = mockRequests.find((r) => r.urgencyLevel === 'critical');
-  const nextEvent = mockEvents[0];
-  const unreadCount = mockNotifications.filter((n) => !n.read).length;
 
+  const { profile, isLoading } = useProfile();
+  const { events } = useCentersAndEvents();
+  const { requests } = useCommunity();
+
+  // Real data only — no mock fallback
+  const urgentRequest = requests.find((r) => r.urgencyLevel === 'critical');
+  const nextEvent = events[0];
+
+  // Smart matching only runs when we have a real urgent request
+  // candidateDonors will be real users from DB in a future iteration
   const recommendedDonors = urgentRequest
-    ? getRecommendedDonors({
-        request: urgentRequest,
-        candidateDonors: mockCandidateDonors,
-      })
+    ? getRecommendedDonors({ request: urgentRequest, candidateDonors: [] })
     : [];
 
   return (
@@ -49,38 +52,42 @@ export default function HomeScreen() {
               <Moon size={20} color={theme.ink} />
             )}
           </TouchableOpacity>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={[styles.iconButton, { backgroundColor: theme.surface }]}
             onPress={() => setShowNotifications(true)}
           >
             <Bell size={20} color={theme.ink} />
-            {unreadCount > 0 && <View style={[styles.dot, { backgroundColor: theme.crimson }]} />}
           </TouchableOpacity>
         </View>
       </View>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <GreetingCard user={mockUser} />
-        
-
-
-        <EligibilityCard user={mockUser} />
+        {isLoading ? (
+          <View style={{ padding: spacing.xl, alignItems: 'center' }}>
+            <Text style={[typography.body, { color: theme.inkFaint }]}>Loading your profile…</Text>
+          </View>
+        ) : (
+          <>
+            {profile && <GreetingCard user={profile} />}
+            {profile && <EligibilityCard user={profile} />}
+          </>
+        )}
         {nextEvent && <UpcomingEventCard event={nextEvent} />}
-        {urgentRequest && (
+        {urgentRequest && profile && (
           <UrgentRequestCard
             request={urgentRequest}
             recommendedDonors={recommendedDonors}
-            currentUserId={mockUser.id}
+            currentUserId={profile.id}
           />
         )}
-        {/* Removed AI donor insight feature from homepage (Smart Blood Request Matching MVP focuses on urgent matching). */}
         <View style={{ height: spacing.xxl * 2 }} />
       </ScrollView>
       <AskDonaFAB />
-      
-      <NotificationModal 
-        visible={showNotifications} 
-        onClose={() => setShowNotifications(false)} 
-        notifications={mockNotifications}
+
+      {/* Notifications: will be driven by real DB data in a future iteration */}
+      <NotificationModal
+        visible={showNotifications}
+        onClose={() => setShowNotifications(false)}
+        notifications={[]}
       />
     </SafeAreaView>
   );
@@ -125,38 +132,5 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     borderWidth: 1.5,
     borderColor: '#FFF',
-  },
-  ctaCard: {
-    marginHorizontal: spacing.lg,
-    marginBottom: spacing.lg,
-    padding: spacing.lg,
-    borderRadius: radius.lg,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    elevation: 3,
-  },
-
-  ctaContent: {
-    marginBottom: spacing.md,
-  },
-  ctaTitle: {
-    ...typography.h2,
-    fontSize: 18,
-  },
-  ctaBody: {
-    ...typography.caption,
-    marginTop: 4,
-  },
-  ctaButton: {
-    paddingVertical: spacing.sm,
-    borderRadius: radius.md,
-    alignItems: 'center',
-  },
-  ctaButtonText: {
-    ...typography.bodyStrong,
-    color: '#FFF',
-    fontSize: 14,
   },
 });

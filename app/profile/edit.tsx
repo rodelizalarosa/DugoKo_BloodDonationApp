@@ -8,6 +8,7 @@ import { Card } from '@/components/ui/Card';
 import { ScreenHeader } from '@/components/ui/ScreenHeader';
 import { radius, spacing, typography } from '@/constants/theme';
 import { useTheme } from '@/context/ThemeContext';
+import { useToast } from '@/context/ToastContext';
 import { mockUser } from '@/constants/mockData';
 import { BloodType } from '@/types';
 
@@ -18,19 +19,25 @@ const currentYear = new Date().getFullYear();
 const years = Array.from({ length: 80 }, (_, i) => currentYear - i);
 const days = Array.from({ length: 31 }, (_, i) => i + 1);
 
+import { useProfile } from '@/lib/hooks/useProfile';
+
 export default function EditProfileScreen() {
   const router = useRouter();
   const { theme, isDarkMode } = useTheme();
+  const { showToast } = useToast();
+  const { profile, updateProfile } = useProfile();
 
-  const [firstName, setFirstName] = useState(mockUser.firstName);
-  const [middleName, setMiddleName] = useState(mockUser.middleName ?? '');
-  const [lastName, setLastName] = useState(mockUser.lastName);
-  const [email, setEmail] = useState(mockUser.email);
-  const [bloodType, setBloodType] = useState<BloodType | null>(mockUser.bloodType);
-  const [weight, setWeight] = useState(mockUser.weightKg ? `${mockUser.weightKg}` : '');
+  const user = profile || mockUser;
+
+  const [firstName, setFirstName] = useState(user.firstName);
+  const [middleName, setMiddleName] = useState(user.middleName ?? '');
+  const [lastName, setLastName] = useState(user.lastName);
+  const [email, setEmail] = useState(user.email);
+  const [bloodType, setBloodType] = useState<BloodType | null>(user.bloodType);
+  const [weight, setWeight] = useState(user.weightKg ? `${user.weightKg}` : '');
 
   // Birthdate picker state
-  const parsedDate = mockUser.birthdate ? new Date(mockUser.birthdate) : new Date();
+  const parsedDate = user.birthdate ? new Date(user.birthdate) : new Date();
   const [selectedYear, setSelectedYear] = useState(parsedDate.getFullYear());
   const [selectedMonth, setSelectedMonth] = useState(parsedDate.getMonth());
   const [selectedDay, setSelectedDay] = useState(parsedDate.getDate());
@@ -138,7 +145,27 @@ export default function EditProfileScreen() {
           </View>
         </Card>
 
-        <Button label="Save Changes" onPress={() => router.back()} fullWidth style={{ marginTop: spacing.lg }} />
+        <Button 
+          label="Save Changes" 
+          onPress={async () => {
+            const formattedBirthdate = `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}-${String(selectedDay).padStart(2, '0')}`;
+            const { error } = await updateProfile({
+              full_name: `${firstName} ${lastName}`.trim(),
+              blood_type: bloodType as any,
+              birthdate: formattedBirthdate,
+              weight_kg: weight ? parseFloat(weight) : null,
+              profile_complete: true,
+            });
+            if (error) {
+              showToast({ type: 'error', title: 'Save failed', message: error });
+            } else {
+              showToast({ type: 'success', title: 'Profile saved!', message: 'Your changes have been updated.' });
+              router.back();
+            }
+          }} 
+          fullWidth 
+          style={{ marginTop: spacing.lg }} 
+        />
 
         {/* Date Picker Modal */}
         <Modal visible={showDatePicker} transparent animationType="slide">

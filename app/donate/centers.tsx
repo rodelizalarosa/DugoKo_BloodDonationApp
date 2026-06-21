@@ -1,18 +1,20 @@
 import { Navigation, Phone, MapPin } from 'lucide-react-native';
 import React, { useMemo, useState } from 'react';
-import { Linking, Pressable, ScrollView, StyleSheet, Text, View, Platform } from 'react-native';
-import MapView, { Marker } from 'react-native-maps';
+import { Linking, Pressable, ScrollView, StyleSheet, Text, View, Platform, ActivityIndicator } from 'react-native';
+import Map from '@/components/ui/Map';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { ScreenHeader } from '@/components/ui/ScreenHeader';
 import { radius, spacing, typography } from '@/constants/theme';
 import { useTheme } from '@/context/ThemeContext';
+import { useCentersAndEvents } from '@/lib/hooks/useCentersAndEvents';
 import { mockCenters } from '@/constants/mockData';
 
 export default function CentersScreen() {
   const { theme, isDarkMode } = useTheme();
-  const [selectedId, setSelectedId] = useState<string>('c1');
+  const { centers } = useCentersAndEvents();
+  const [selectedId, setSelectedId] = useState<string>('');
 
   const openDirections = (lat: number, lng: number, label: string) => {
     const latLng = `${lat},${lng}`;
@@ -37,9 +39,11 @@ export default function CentersScreen() {
     });
   };
 
-  const selectedCenter = mockCenters.find((c) => c.id === selectedId) || mockCenters[0];
+  const activeId = selectedId || centers[0]?.id || '';
+  const selectedCenter = centers.find((c) => c.id === activeId) || centers[0];
 
   const region = useMemo(() => {
+    if (!selectedCenter) return null;
     const lat = selectedCenter.latitude;
     const lng = selectedCenter.longitude;
 
@@ -53,7 +57,30 @@ export default function CentersScreen() {
       latitudeDelta: 0.05,
       longitudeDelta: 0.05,
     };
-  }, [selectedCenter.latitude, selectedCenter.longitude]);
+  }, [selectedCenter]);
+
+  const markers = useMemo(() => {
+    return centers
+      .filter((c) => typeof c.latitude === 'number' && typeof c.longitude === 'number' && !Number.isNaN(c.latitude) && !Number.isNaN(c.longitude))
+      .map((c) => ({
+        id: c.id,
+        latitude: c.latitude,
+        longitude: c.longitude,
+        title: c.name,
+        description: c.address,
+      }));
+  }, [centers]);
+
+  if (centers.length === 0) {
+    return (
+      <SafeAreaView style={[styles.safe, { backgroundColor: theme.paper }]} edges={['top']}>
+        <ScreenHeader title="Donation Centers" subtitle="Locate nearby PRC centers" />
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+          <ActivityIndicator size="large" color={theme.crimson} />
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.paper }]} edges={['top']}>
@@ -64,26 +91,14 @@ export default function CentersScreen() {
           <Text style={[styles.mapLabel, { color: theme.inkFaint }]}>DONATION CENTERS MAP</Text>
 
           {region ? (
-            <MapView
+            <Map
               style={styles.mapView}
-              initialRegion={region}
-              showsUserLocation={false}
-              scrollEnabled
-              zoomEnabled
-            >
-              {mockCenters.map((c) => {
-                if (typeof c.latitude !== 'number' || typeof c.longitude !== 'number') return null;
-                return (
-                  <Marker
-                    key={c.id}
-                    coordinate={{ latitude: c.latitude, longitude: c.longitude }}
-                    title={c.name}
-                    description={c.address}
-                    onPress={() => setSelectedId(c.id)}
-                  />
-                );
-              })}
-            </MapView>
+              centerLatitude={selectedCenter.latitude}
+              centerLongitude={selectedCenter.longitude}
+              zoom={12}
+              markers={markers}
+              onMarkerPress={(id) => setSelectedId(id)}
+            />
           ) : (
             <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
               <Text style={{ color: theme.inkMuted }}>Map unavailable</Text>
@@ -119,8 +134,8 @@ export default function CentersScreen() {
 
         {/* List of all Centers */}
         <Text style={[styles.sectionTitle, { color: theme.ink }]}>All Chapters</Text>
-        {mockCenters.map((c) => {
-          const isSelected = c.id === selectedId;
+        {centers.map((c) => {
+          const isSelected = c.id === activeId;
           return (
             <Pressable key={c.id} onPress={() => setSelectedId(c.id)}>
               <Card style={[styles.centerCard, isSelected && { borderColor: theme.crimson, borderWidth: 1 }]}>

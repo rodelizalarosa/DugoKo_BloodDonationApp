@@ -1,6 +1,6 @@
 import { useLocalSearchParams } from 'expo-router';
 import React, { useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -9,20 +9,34 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { ScreenHeader } from '@/components/ui/ScreenHeader';
 import { spacing, typography } from '@/constants/theme';
 import { useTheme } from '@/context/ThemeContext';
-import { mockCommunityPosts, mockRequests, mockUser } from '@/constants/mockData';
+import { useCommunity } from '@/lib/hooks/useCommunity';
 import { HelperRegistrationModal } from '@/components/community/HelperRegistrationModal';
+import { useToast } from '@/context/ToastContext';
 
 export default function CommunityPostDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { theme } = useTheme();
-  const post = mockCommunityPosts.find((p) => p.id === id);
+  const { posts, requests, isLoading } = useCommunity();
+  const { showToast } = useToast();
+  const post = posts.find((p) => p.id === id);
   const relatedRequest = post?.relatedRequestId
-    ? mockRequests.find((r) => r.id === post.relatedRequestId)
+    ? requests.find((r) => r.id === post.relatedRequestId)
     : undefined;
   const [helperModalVisible, setHelperModalVisible] = useState(false);
   const [helperSubmitted, setHelperSubmitted] = useState(false);
   const [helperFullName, setHelperFullName] = useState<string | null>(null);
   const [helperContactNumber, setHelperContactNumber] = useState<string | null>(null);
+
+  if (isLoading) {
+    return (
+      <SafeAreaView style={[styles.safe, { backgroundColor: theme.paper }]}>
+        <ScreenHeader title="Community" />
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <ActivityIndicator color={theme.crimson} />
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   if (!post) {
     return (
@@ -107,6 +121,11 @@ export default function CommunityPostDetailScreen() {
             setHelperFullName(payload.fullName);
             setHelperContactNumber(payload.contactNumber);
             setHelperModalVisible(false);
+            showToast({
+              type: 'success',
+              title: 'Help offer sent!',
+              message: `The requester has been notified. Thank you, ${payload.fullName}!`,
+            });
           }}
         />
 
