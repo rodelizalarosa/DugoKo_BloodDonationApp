@@ -1,40 +1,17 @@
 # DugóKo — Core Features, End-to-End Flows, and Project Rules/Specifications
 
-This document lists the **core features** of the DugóKo app and provides the **detailed flow** for each process, plus the **rules/specifications** that govern eligibility gating, posting, and core data models.
+This document lists the **core features** of the DugóKo app and provides the **detailed flow** for each process, plus the **rules/specifications** that govern eligibility gating, “I Can Help”, posting, and donation verification.
 
-> Source of truth for specs/flows:
-> - `README.md` (UI/UX-only, mock data, navigation + high-level flow)
+> Source of truth for specs/flows in this repo:
+> - `APP_CORE_FEATURES.md` (this file)
 > - `database/schema.sql` (canonical data model + enums/statuses)
-> - `TODO.md` (community gating + donor story / blood request posting rules and remaining work items)
+> - `TODO.md` (implementation gaps / checklist)
 
 ---
 
-## 1) Project Scope & Data Model Rules
+## 1) Navigation & Screen Grouping (How the app is organized)
 
-### 1.1 UI/UX-only build (current state)
-- Every screen/component/navigation path is real and navigable.
-- All displayed data comes from `constants/mockData.ts` (not a live backend).
-- When a backend is added later:
-  - You should swap mock data calls with real API/database calls.
-  - The **screens themselves should not need major structural changes**.
-
-### 1.2 Canonical domain data (database schema)
-The `database/schema.sql` defines the intended Postgres-flavored backend model. Even though the current build uses mock data, these entities define the **real rules/specs** the UI should enforce.
-
-#### Core enums (behavior-critical)
-- `blood_type`: `O+ | O- | A+ | A- | B+ | B- | AB+ | AB-`
-- `donor_level`: `New Donor | Regular Donor | Hero Donor | Lifesaver`
-- `eligibility_status`: `eligible | deferred | not_eligible | unknown`
-- `rsvp_status`: `going | interested | cancelled`
-- `urgency_level`: `critical | urgent | moderate`
-- `request_status`: `open | fulfilled | closed`
-- `post_type`: `request | story | announcement`
-
----
-
-## 2) Navigation & Screen Grouping (How the app is organized)
-
-### 2.1 Route groups (expo-router)
+### 1.1 Route groups (expo-router)
 Routes are defined via `app/` and `app/_layout.tsx` (stack + tabs). Core modules:
 
 - Auth:
@@ -43,13 +20,14 @@ Routes are defined via `app/` and `app/_layout.tsx` (stack + tabs). Core modules
   - `app/auth/forgot-password.tsx`
   - `app/auth/otp.tsx`
   - `app/auth/reset-password.tsx`
+
 - Tabs:
-  - `app/(tabs)/` (tab bar config; 5 tabs)
   - `app/(tabs)/index.tsx` (Home)
   - `app/(tabs)/donate.tsx` (Donate hub)
   - `app/(tabs)/community.tsx` (Community feed)
   - `app/(tabs)/learn.tsx` (Learn list)
   - `app/(tabs)/profile.tsx` (Profile hub)
+
 - Donate detail screens:
   - `app/donate/eligibility.tsx`
   - `app/donate/centers.tsx`
@@ -57,376 +35,382 @@ Routes are defined via `app/` and `app/_layout.tsx` (stack + tabs). Core modules
   - `app/donate/events/[id].tsx`
   - `app/donate/log.tsx`
   - `app/donate/receipt.tsx`
+
 - Community:
   - `app/community/category/[type].tsx`
   - `app/community/[id].tsx` (request/story/announcement detail)
+
 - Learn:
   - `app/learn/[id].tsx`
+
 - Profile:
   - `app/profile/edit.tsx`
-  - `app/profile/settings.tsx`
   - `app/profile/history.tsx`
-- Insight:
-  - `app/insight/index.tsx`
+  - `app/profile/settings.tsx`
 
 ---
 
-## 3) Core Features (by domain)
+## 2) Core Modules Overview
 
-## 3.1 Authentication (Auth module)
-
-### Core feature goals
-- Allow users to register and log in.
-- Enable password recovery via OTP/reset flow.
-
-### End-to-end flow (logical)
-1. **Register** (`/auth/register`)
-   - User enters identity credentials.
-   - On completion, user proceeds to login (or OTP step depending on implementation).
-2. **Login** (`/auth/login`)
-   - User authenticates.
-3. **Forgot password** (`/auth/forgot-password`)
-   - User requests password reset.
-4. **OTP verification** (`/auth/otp`)
-   - User submits OTP.
-5. **Reset password** (`/auth/reset-password`)
-   - User sets a new password.
-6. **Redirect** back to login.
-
-> Backend mapping (schema): `users` table stores identity fields and donor profile fields (`blood_type`, `donor_level`, etc.). In a production build, auth should tie to `users.id`.
+- **Authentication (Onboarding/Auth module)**
+- **Home**
+- **Donate**
+- **Community**
+- **Learn**
+- **Profile**
 
 ---
 
-## 3.2 Donate module
+## 3) Authentication Module (Onboarding Screen)
 
-### Core feature goals
-Mirror real-world donation steps:
-1) eligibility check → 2) find center → 3) attend events (RSVP) → 4) log donation → 5) receive receipt + next eligibility guidance → 6) generate insight.
+### 3.1 Login
+**Route:** `/auth/login`
 
-### End-to-end flow A: Eligibility Checker → next steps
-1. User opens **Donate hub** (`/(tabs)/donate`).
-2. Tap **Eligibility Checker** → `/donate/eligibility`.
-3. Complete eligibility questionnaire (5 yes/no in the UI).
-4. App computes/derives an eligibility state:
-   - `eligible`
-   - `deferred` (with a day window / next eligible date)
-   - `not_eligible` / `unknown` (as fallback)
-5. UI routes decision:
-   - If `eligible`: user can proceed to:
-     - Find center
-     - See events
-   - If `deferred`: UI routes user to Learn explanations (Learn module).
-   - If `not_eligible`: Learn/explanation pathway (and/or disable actions).
+1. User inputs credentials:
+   - Email
+   - Password
+2. App checks if credentials match.
+3. If user is new:
+   - redirect to **Complete Profile** (then proceed to Home)
+4. If not new:
+   - proceed to **Home Screen**
 
-> Backend mapping (schema + rules):
-- `eligibility_status` enum defines the states.
-- The actual date math is represented in the UI-side `lib/eligibility.ts` placeholder today.
+### 3.2 Forgot Password
+**Route:** `/auth/forgot-password` → `/auth/otp` → `/auth/reset-password`
 
----
+1. User enters email.
+2. App sends OTP to the email.
+   - OTP is **effective for 15 minutes**.
+   - If OTP is not sent/available, allow **resend**.
+3. User inputs the **6-digit code**.
+4. Verify OTP.
+5. User sets a new password.
+6. Password reset complete → redirect back to **Login**.
 
-### End-to-end flow B: Find Donation Center
-1. User opens `/donate/centers` from the Donate hub.
-2. Browse a list of donation centers.
-3. Center details provide:
-   - address
-   - contact
-   - hours (when available)
-4. User can initiate call/navigation (UI capability; actual integration can be added later).
+### 3.3 Register
+**Route:** `/auth/register`
 
-> Backend mapping: `centers` table fields:
-- `name`, `address`, `latitude`, `longitude`, `contact`, `hours`.
-
----
-
-### End-to-end flow C: Events list → Event Details → RSVP
-1. User opens **Blood Letting Events** list:
-   - `/donate/events/index.tsx`
-2. Select an event:
-   - `/donate/events/[id].tsx`
-3. View details:
-   - title, date, time, venue, description
-4. RSVP:
-   - user chooses RSVP status (e.g., `going`, `interested`)
-5. UI confirmation: RSVP saved (in mock build: local state; in backend: `event_rsvp`).
-
-> Backend mapping:
-- `events` table for event data
-- `event_rsvp` table for RSVP state
-- `event_rsvp` unique constraint: `(event_id, user_id)`
-
----
-
-### End-to-end flow D: Attend (offline donation) → Log Donation ⭐ → Receipt
-1. After attending donation, user goes to **Log Donation**:
-   - `/donate/log.tsx`
-2. Fill donation details (required + optional fields).
-3. Save donation record:
-   - creates a row in `donations`
-4. Derived updates after save (production spec; UI should reflect this):
-   - increment `users.total_donations`
-   - update `users.last_donation_date`
-   - recompute `users.donor_level`
-   - update/produce `donor_insights`
-5. App shows **Donation Receipt**:
-   - `/donate/receipt.tsx`
-6. Receipt displays:
-   - next donation window / next eligible date
-   - blood bag reference (if provided)
-   - verification state (UI uses mock verification flow)
-7. User can:
-   - share receipt (optional UI integration)
-   - navigate back to Donate
-
-> Backend mapping:
-- `donations` table (source of truth)
-- Schema notes indicate trigger-worthy production behavior after `INSERT` on donations:
-  - update user stats
-  - recompute donor insights
-
----
-
-## 3.3 Community module
-
-### Core feature goals
-Enable a community feed with:
-- Blood Requests
-- Donor Stories
-- Announcements
-
-Additionally:
-- A request detail provides **“I Can Help”** action.
-- Helper registration is gated and requires consent and required fields.
-
----
-
-### End-to-end flow E: Community feed → Post detail
-1. User opens Community tab:
-   - `/ (tabs)/community.tsx`
-2. Browse feed (requests/stories/announcements).
-3. Tap a post card:
-   - `/community/[id].tsx`
-4. UI renders post-specific detail and actions:
-   - Request detail shows “I Can Help” entry point
-   - Story detail is read-only + prompts sharing/engagement
-   - Announcement detail provides info
-
-> Backend mapping: `community_posts`
-- `post_type` determines which UI surfaces
-
----
-
-### End-to-end flow F: “I Can Help” → Helper Registration → Confirmation
-1. From a **blood request post detail** (`/community/[id].tsx`), user taps **I Can Help**.
-2. App opens Helper Registration Modal:
-   - `components/community/HelperRegistrationModal.tsx`
-3. Modal collects required fields:
-   - Full name
+1. User inputs registration credentials:
+   - First name
+   - Middle initial
+   - Last name
+   - Email (must be unique)
    - Contact number
-   - Red Cross health check consent (checkbox)
-4. On submit:
-   - Show confirmation message
-   - Disclaimer/out-of-scope communication statement
-   - Store helper display fields for UI
-5. In production, this should create a response record:
-   - `request_responses` row linking helper/user to `blood_requests.id`
-
-> Backend mapping:
-- `request_responses`:
-  - `request_id`
-  - `user_id`
-  - unique constraint `(request_id, user_id)` ensures one response per user per request.
+   - Password
+   - Confirm password
+2. App checks email uniqueness.
+3. OTP is sent to the email.
+4. User inputs **6-digit OTP** to register.
+5. Verify OTP.
+6. Registration completes successfully.
+7. Redirect back to **Login**.
 
 ---
 
-## 3.4 Posting Eligibility Gating (Community create flows)
+## 4) Home Module
 
-This is explicitly tracked in `TODO.md`.
+### 4.1 Greetings
+- Display greeting based on profile state.
 
-### Rule: gating before creating posts
-Eligibility checks must gate the ability to open posting modals:
-- Blood Requests posts creation
-- Donor Stories posts creation
+### 4.2 Eligibility Card → Eligibility Checker (Donate module)
+- Provide an entry point to Donate eligibility.
+- **Find Event / eligibility CTA** should guide the user into the Donate flow.
 
-Behavior:
-- If eligible:
-  - allow opening the posting modal/form
-- If deferred/not eligible:
-  - show message with eligibility state (if available)
+### 4.3 Upcoming Event
+- Include **View Event** button.
+- Must show the **latest Blood Letting Event**.
+- Tapping an event opens event details and RSVP/participation flow.
 
-> Status according to `TODO.md`:
-- Step 3: Eligibility check gate for creating requests/stories is marked **[x] done**.
+### 4.4 AI FEATURE NI SHA — Smart Blood Request Matching
+**Purpose:** Smart Analytics / Smart Blood Request Matching.
 
----
+AI analyzes:
+- user data
+- blood type compatibility
+- last donation date
+- eligibility
+- distance from request
 
-### End-to-end flow G: Create “Blood Request” post (eligibility gated)
-1. User attempts to open create entry point from:
-   - Community tab screen (`app/(tabs)/community.tsx`) (**Step 5 pending**)
-   - Or from post detail for certain entry points (**Step 5 pending**)
-2. Eligibility gate runs:
-   - uses eligibility state derived from questionnaire / donor status
+AI ranks donors and presents **Recommended Donors** cards, e.g.:
+1. Juan Cruz — A+ — Eligible — 3 km away
+2. Maria Santos — O+ — Eligible — 5 km away
+
+#### Push notification content (example)
+“Someone nearby urgently needs A+ blood. You are eligible and compatible. Would you like to help?”
+
+#### UI rule: change “View Eligibility”
+- Replace **View Eligibility** with **I Can Help**.
+
+#### I Can Help → Eligibility Checker → I Can Help form
+1. User taps **I Can Help** from the recommendation card / prompt.
+2. Open **Eligibility Checker**.
 3. If eligible:
-   - open `DonorStoryCreateModal` or Blood Request create modal (blood request modal exists in components; TODO refers to adding form)
-4. User completes required fields (TODO Step 4 specifies):
-   - Hospital name + location (required)
-   - Blood type (required)
-   - Units of blood (required)
-   - When blood is needed (required: accepts “today”, specific date/time, etc.)
-5. Optional fields:
-   - additional patient info (optional)
-   - additional notes (optional; e.g., willingness to pay)
-6. On submit (current spec intent):
-   - create a local community post object (mock) with triage fields
+   - show **I Can Help form** requesting:
+     - full name
+     - contact number
+     - email
+4. User checks the checkbox and keeps the important note:
+   - **Confirmation email will be sent to the donor**.
+   - **On requester side**, only **full name and contact number** will appear.
+5. Validate credentials format.
+6. Submit.
 
-> Remaining work in `TODO.md` (explicit):
-- Implement required + optional fields: **[ ]**
-- Add AI urgency/triage derived from “when blood is needed”: **[ ]**
-- On submit: create local community post with triage fields: **[ ]**
+### 4.5 Ask Dona AI
+- User asks about blood donation.
+- AI responds using **Philippine Red Cross guidelines**.
+- Include disclaimer:
+  - “Not a medical diagnosis” (and that it’s informational guidance only).
 
 ---
 
-### End-to-end flow H: Create “Donor Story” post (eligibility gated)
-1. User attempts to open story creation entry.
-2. Eligibility gate runs (Step 3 done).
+## 5) Donate Module
+
+### 5.1 Eligibility Checker (questionnaire)
+**Route:** `/donate/eligibility`
+
+1. User answers a questionnaire (5 yes/no).
+2. App computes result:
+   - **eligible**
+   - **deferred**
+   - **not eligible**
+   - other fallback states as needed
+
+#### Disclaimer (MUST)
+- “Results will not replace the assessment of the PRC regarding blood donation.”
+- This helps donors understand factors that affect eligibility to donate immediately.
+
 3. If eligible:
-   - open story modal: `components/community/DonorStoryCreateModal.tsx`
-4. User fills story content.
-5. On submit:
-   - create mock community post object (story).
+   - proceed to donation actions.
+4. If deferred:
+   - result shows **temporarily deferred**
+   - **Learn why** button routes to Learn explanations.
 
-> Note:
-> The exact story field requirements are not fully expanded in `TODO.md`, but gating is implemented (Step 3 done).
+### 5.2 Find Donation Center
+**Route:** `/donate/centers`
 
----
+1. User can select location.
+2. Show **Get directions** (Mapbox navigation).
+3. Show **Call Center** (directly call station).
 
-## 3.5 Learn module
+### 5.3 Blood Letting Events
+**Routes:**
+- `/donate/events/index.tsx`
+- `/donate/events/[id].tsx`
 
-### Core feature goals
-Provide long-form informational content donors can read:
-- list of articles
-- article detail view
+1. Select blood letting events near you.
+2. Each event shows Complete Details.
+3. Provide **Get directions** (Mapbox).
+4. If user wants to donate and get a slot:
+   - click **I’m going**
+   - open event registration form:
+     - full name
+     - contact number
+     - email
+   - submit registration
+5. Email confirmation is sent:
+   - includes ticket reference
+   - includes notes on what to bring
+6. Slot confirmed.
 
-### End-to-end flow I: Learn list → Article detail
-1. User opens Learn tab:
-   - `/ (tabs)/learn.tsx` (list screen)
-2. Browse article cards (category badges, summary, read time)
-3. Tap an article:
-   - `/learn/[id].tsx`
-4. Read full content.
+#### After registration: log donation from the same event
+- After registering, user can return to the same event and click **Log donation**.
+- Required details auto-populate.
+- Optional: fill out **Red Cross Verification Card** (optional but encouraged)
+  - upload donor card given by PRC or any document that verifies participation
+  - subject for review
 
-> Backend mapping:
-- `learn_articles` table:
-  - `title`, `category`, `summary`, `read_minutes`, `content`, `published_at`, `cover_emoji`
+#### Save Donation and receipt behavior
+- “Saving will update your total donations.”
+- **Verified cards**:
+  - generate certified digital records immediately
+  - receipt buttons **enabled** for print/download
+- **Unverified cards**:
+  - remain **subject for review** (not “remain pending”)
+  - receipt buttons **disabled** for print/download
 
----
+### 5.4 Log a Donation (self-logged)
+- If already donated but not registered to any events beforehand, it’s okay.
 
-## 3.6 Insight module
+Flow:
+1. Fill required details.
+2. Provide **Red Cross Verification Card** (optional but encouraged).
+3. Save donation.
+4. Receipt display note:
+   - “Self-logged. Red Cross is verifying card photo (takes 3–5 days).”
+5. Receipt buttons:
+   - if unverified: print/download **disabled**
+   - if verified: print/download **enabled**
 
-### Core feature goals
-Display AI-derived or computed donation insights.
+### 5.5 Donation Receipt
+**Route:** `/donate/receipt`
 
-### End-to-end flow J: Home → Insight card → Insight detail
-1. Home screen shows AI Donor Insight card.
-2. Tap card:
-   - `/insight/index.tsx`
-3. Insight detail:
-   - uses eligibility/eligibility formatting (`formatDate` referenced in code)
-   - uses `ThemeContext` for tone/styling
-
-> Backend mapping:
-- `donor_insights` table can cache derived insight fields per user:
-  - `total_donations`, `estimated_lives_impacted`, `donation_streak`, `next_window_date`
-
----
-
-## 4) Home Module Detailed Flow (Decision-based navigation)
-
-### End-to-end flow K: Home cards
-Home (`/(tabs)/index.tsx`) presents decision points:
-
-1. **Greeting Card**
-   - If profile incomplete:
-     - user is directed to `Profile/Edit` (`/profile/edit.tsx`)
-   - Else:
-     - user stays on home and sees other cards
-2. **Eligibility Card**
-   - “Find Event” leads into Donate flow
-   - Navigate to Donate tab and then to Eligibility Checker
-3. **Upcoming Event Card**
-   - opens event detail → RSVP flow
-4. **Urgent Request Card**
-   - “Help” leads to Community tab
-   - request detail → “I Can Help” → helper registration → confirmation
-5. **AI Donor Insight Card**
-   - navigates to Insight detail screen
+- Shows **ALL donation receipts** for the user (verified and unverified).
+- If verified by PRC: print/download buttons enabled.
+- If not verified: print/download buttons disabled.
+- Sharing should remain available for unverified receipts.
 
 ---
 
-## 5) Rules/Specifications Checklist (what must be enforced)
+## 6) Community Module
 
-### 5.1 Community creation gating (MUST)
-From `TODO.md` Step 3:
-- Blood Requests creation and Donor Stories creation are gated by eligibility.
-- If eligible → allow open/create.
-- If deferred/not eligible → show eligibility message and block creation.
+### 6.1 Community feed + quick actions
+- Provide 3 quick actions:
+  - Blood Request
+  - Donor Story
+  - Announcement
 
-### 5.2 Helper registration required fields (MUST)
-From `TODO.md` Step 2:
-- Full name (required)
-- Contact number (required)
-- Red Cross health check consent checkbox (required)
-On submit:
-- show warning/confirmation
-- communication/out-of-scope disclaimer
-- store helper display fields for UI
+**Posting rule change (MUST):**
+- Remove eligibility gating for creating **Blood Request** and **Donor Story** posts.
+- Anyone can request blood.
 
-### 5.3 Database integrity constraints (MUST in backend)
-From `database/schema.sql`:
-- `event_rsvp` unique: `(event_id, user_id)`
-- `request_responses` unique: `(request_id, user_id)`
-- `users.blood_type` uses `blood_type` enum
-- `community_posts.post_type` uses `post_type` enum
-- `blood_requests.status` uses `request_status`
+- Remove Blood request and donor story buttons for posting from places where they were gated; place their creation inside their respective concerns (request/story create entry points).
 
-### 5.4 Eligibility-derived status (MUST in backend logic)
-From `database/schema.sql`:
-- Eligibility states must be drawn from:
-  - `eligible | deferred | not_eligible | unknown`
-- UI logic should interpret:
-  - `deferred` → show next-window guidance
-  - `eligible` → allow donation actions and posting creation
+### 6.2 Feed ordering + filtering
+- Recent activities arranged from latest to old.
+- Filtering feature: **All time / Today / This week / This month**.
+- Up to 10 posts shown for recent activities.
 
 ---
 
-## 6) Core Processes Summary (one-line flow map)
+## 7) Community — Blood Request
 
-- **Auth**: Register → Login → Forgot Password → OTP → Reset Password
-- **Donate**:
-  - Eligibility Questionnaire → Eligible/Deferred → Centers/Events
-  - Events → Event Detail → RSVP
-  - Offline Donation → Log Donation → Receipt (next eligible date + details)
-- **Community**:
-  - Feed → Post Detail → Request Detail → “I Can Help” → Helper Registration Modal → confirmation
-  - Create Post (Request/Story) is eligibility-gated
-- **Learn**: Learn List → Article Detail
-- **Insight**: Home Insight Card → Insight Detail
-- **Profile**:
-  - Profile header/status → Edit profile → History / Receipts access
+### 7.1 Viewing all blood requests
+**Route:** community screens (feed)
+- Show all blood request posts.
+
+### 7.2 Posting a Blood Request
+At the top, users can post/request blood using a section like “What’s on your mind”.
+
+User completes:
+
+**Required fields:**
+- Hospital name + location
+- Blood type
+- Units of blood
+- When blood is needed
+  - accepts values like “today”, specific date/time, etc.
+
+**Optional fields:**
+- additional patient info
+- additional notes (e.g., willingness to pay)
+
+**System triage classification (MUST):**
+- System determines urgency/critical/pledge based on:
+  - when blood is needed
+  - reason why blood is needed
+- Examples:
+  - **critical** if for surgeries
+  - **urgent** if needed today/as soon as possible
+  - **pledge** if needed for dialysis / not really urgent but needed this week
+
+Submit button:
+- creates the blood request post.
+
+### 7.3 Responding to a blood request
+1. Open a specific post card.
+2. System checks if your blood type can donate.
+3. If yes:
+   - show **I Can Help** button
+4. If no:
+   - hide I Can Help button
+5. Tap **I Can Help** → open **Eligibility Checker**.
+6. If eligible:
+   - show **I Can Help form** (full name, contact number, email)
+   - checkbox + important note:
+     - confirmation email sent to donor
+     - requester side shows only full name and contact number
+   - credentials format check
+   - submit
 
 ---
 
-## 7) Current Implementation Gaps (as per TODO.md)
+## 8) Community — Donor Stories
 
-The following steps are still incomplete:
+### 8.1 Viewing all donor stories
+- Show all donor story posts.
 
-- Step 4 (Blood Request creation form):
-  - Required + optional fields implementation: **incomplete**
-  - AI urgency/triage derived from “when blood is needed”: **incomplete**
-  - Submit behavior to create local community post with triage fields: **incomplete**
-- Step 5 (UI wiring for create entry points):
-  - Add Blood Request / Donor Story “create” entry points on:
-    - Community tab screen (`app/(tabs)/community.tsx`): **incomplete**
-    - Post detail screen (`app/community/[id].tsx`) for “I Can Help” button modal behavior: **incomplete**
-  - Update community detail to use modal for “I can help” rather than local toggles: **incomplete**
-- Step 6 (sanity checks):
-  - Typecheck/build: **pending**
-  - Manual UI walkthrough: **pending**
+### 8.2 Posting donor stories
+At the top, users can post what they want about their milestone.
+- Submit button creates story.
+- Content violating community guidelines may remove the post.
+
+### 8.3 Viewing donor story
+- Tap card → read story.
+- Provide **Share this story** button.
+
+---
+
+## 9) Community — Announcements
+
+- Can view all announcements from the DugoKo Team and PRC.
+
+---
+
+## 10) Learn Module
+
+The learn module must contain **multiple articles** and be organized into tag categories:
+- basics
+- process
+- myths
+
+Flow:
+1. Learn list shows articles by tag and summary.
+2. Article detail screen shows full content.
+
+---
+
+## 11) Profile Module
+
+### 11.1 Uploading profile picture
+1. Tap image button.
+2. Open gallery.
+3. Select and upload.
+4. Image displays.
+5. Optional: tap delete to remove.
+
+### 11.2 Hero Donor badge
+- Tap badge → shows all donor badge list.
+
+### 11.3 Edit Profile
+- Edit details.
+- Provide contact number input placeholder.
+- Save changes.
+
+### 11.4 Donation History
+- Shows all donations logged (verified or unverified).
+- Tap a donation card → opens receipt.
+- If donation is verified:
+  - print/download enabled
+- If not verified:
+  - print/download disabled
+  - still allow sharing to other social media.
+
+### 11.5 Settings → Reset Password
+1. Open Reset Password screen.
+2. Input email → sent OTP.
+3. Input OTP for verification.
+4. Verify OTP.
+5. Set new password.
+6. Password reset complete.
+7. App logs user out automatically.
+8. User logs in again using new password.
+
+### 11.6 Logout
+- Confirm logout.
+- If confirm: log user out.
+- If cancel: logout does not proceed.
+
+---
+
+## 12) Summary of MUST changes from previous flow draft
+
+- Home recommendation card:
+  - change **View Eligibility** → **I Can Help**
+- “Unverified” donation card wording:
+  - change from “pending”/“remain pending” to **subject for review**
+- Community posting:
+  - remove eligibility gating for **Blood Request** and **Donor Stories**
+  - keep “I Can Help” response/eligibility flow intact
+- Learn module:
+  - must support multiple articles grouped by tags (basics/process/myths)
+
