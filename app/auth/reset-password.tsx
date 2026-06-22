@@ -19,8 +19,9 @@ const PASSWORD_RULES = [
 
 export default function ResetPasswordScreen() {
   const router     = useRouter();
-  const { theme }  = useTheme();
+  const { theme, isDarkMode }  = useTheme();
   const { showToast } = useToast();
+  const validationGreen = isDarkMode ? '#22C55E' : '#15803D';
 
   const [password,        setPassword]        = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -60,7 +61,7 @@ export default function ResetPasswordScreen() {
     return (
       <SafeAreaView style={[styles.safe, { backgroundColor: theme.paper }]}>
         <View style={styles.successContent}>
-          <CheckCircle2 size={80} color={theme.success ?? '#16a34a'} />
+          <CheckCircle2 size={80} color={isDarkMode ? '#22C55E' : '#15803D'} />
           <Text style={[styles.title, { color: theme.ink, marginTop: spacing.xl }]}>
             Password Reset!
           </Text>
@@ -97,6 +98,20 @@ export default function ResetPasswordScreen() {
               <Text style={[styles.errorText, { color: theme.crimson }]}>{errorMsg}</Text>
             </View>
           )}
+
+          <View style={styles.rulesList}>
+            {PASSWORD_RULES.map((r) => {
+              const passed = r.test(password);
+              return (
+                <View key={r.id} style={styles.ruleRow}>
+                  <CheckCircle2 size={13} color={passed ? validationGreen : theme.inkFaint} />
+                  <Text style={[styles.ruleText, { color: passed ? validationGreen : theme.inkFaint }]}>
+                    {r.label}
+                  </Text>
+                </View>
+              );
+            })}
+          </View>
 
           <View style={styles.inputGroup}>
             <Text style={[styles.label, { color: theme.inkMuted }]}>New Password</Text>
@@ -151,6 +166,9 @@ const styles = StyleSheet.create({
   form:    { width: '100%', gap: spacing.lg },
   errorBanner: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, padding: spacing.sm, borderRadius: radius.sm },
   errorText:   { ...typography.caption, flex: 1, fontWeight: '600' },
+  rulesList:   { gap: 4, marginBottom: spacing.xs },
+  ruleRow:     { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  ruleText:    { ...typography.caption, fontSize: 11 },
   inputGroup:  { gap: spacing.xs },
   label:       { ...typography.caption, fontWeight: '600' },
   inputWrapper: { height: 56, borderRadius: radius.md, borderWidth: 1, paddingHorizontal: spacing.md, width: '100%' },

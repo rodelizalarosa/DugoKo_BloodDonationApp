@@ -1,6 +1,6 @@
-import { Navigation, Phone, MapPin } from 'lucide-react-native';
+import { Phone, MapPin } from 'lucide-react-native';
 import React, { useMemo, useState } from 'react';
-import { Linking, Pressable, ScrollView, StyleSheet, Text, View, Platform, ActivityIndicator } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View, ActivityIndicator, Linking } from 'react-native';
 import Map from '@/components/ui/Map';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Card } from '@/components/ui/Card';
@@ -9,35 +9,11 @@ import { ScreenHeader } from '@/components/ui/ScreenHeader';
 import { radius, spacing, typography } from '@/constants/theme';
 import { useTheme } from '@/context/ThemeContext';
 import { useCentersAndEvents } from '@/lib/hooks/useCentersAndEvents';
-import { mockCenters } from '@/constants/mockData';
 
 export default function CentersScreen() {
   const { theme, isDarkMode } = useTheme();
   const { centers } = useCentersAndEvents();
   const [selectedId, setSelectedId] = useState<string>('');
-
-  const openDirections = (lat: number, lng: number, label: string) => {
-    const latLng = `${lat},${lng}`;
-
-    // iOS "maps:" deep link (more compatible)
-    const iosUrl = `http://maps.apple.com/?daddr=${latLng}&q=${encodeURIComponent(label)}`;
-    // Android geo deep link
-    const androidUrl = `geo:0,0?q=${latLng}(${encodeURIComponent(label)})`;
-
-    const webUrl = `https://www.google.com/maps/search/?api=1&query=${latLng}`;
-
-    const url = Platform.select({
-      ios: iosUrl,
-      android: androidUrl,
-      default: webUrl,
-    });
-
-    const target = url ?? webUrl;
-
-    Linking.openURL(target).catch(() => {
-      Linking.openURL(webUrl);
-    });
-  };
 
   const activeId = selectedId || centers[0]?.id || '';
   const selectedCenter = centers.find((c) => c.id === activeId) || centers[0];
@@ -86,7 +62,7 @@ export default function CentersScreen() {
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.paper }]} edges={['top']}>
       <ScreenHeader title="Donation Centers" subtitle="Locate nearby PRC centers" />
       <ScrollView contentContainerStyle={styles.content}>
-        {/* Mapbox/Real Map Preview (react-native-maps) */}
+        {/* Mapbox Map Preview */}
         <Card style={[styles.mapCard, { backgroundColor: isDarkMode ? '#1E1212' : '#F6EFEA', borderColor: theme.border, overflow: 'hidden' }]}>
           <Text style={[styles.mapLabel, { color: theme.inkFaint }]}>DONATION CENTERS MAP</Text>
 
@@ -114,20 +90,19 @@ export default function CentersScreen() {
           </View>
           <Text style={[styles.name, { color: theme.ink }]}>{selectedCenter.name}</Text>
           <Text style={[styles.meta, { color: theme.inkMuted }]}>{selectedCenter.address}</Text>
-          <View style={styles.btnRow}>
+          <Text style={[styles.meta, { color: theme.inkFaint }]}>{selectedCenter.contact} · {selectedCenter.hours}</Text>
+          <View style={styles.activeActions}>
             <Button
-              label="Get Directions"
-              variant="primary"
-              onPress={() => openDirections(selectedCenter.latitude, selectedCenter.longitude, selectedCenter.name)}
-              style={styles.actionBtn}
-              labelStyle={{ fontSize: 12 }}
+              label="Show on Map"
+              variant="outline"
+              onPress={() => setSelectedId(selectedCenter.id)}
+              style={{ flex: 1 }}
             />
             <Button
               label="Call Center"
-              variant="outline"
-              onPress={() => Linking.openURL(`tel:${selectedCenter.contact.replace(/[^\d+]/g, '')}`)}
-              style={styles.actionBtn}
-              labelStyle={{ fontSize: 12 }}
+              onPress={() => selectedCenter.contact && Linking.openURL(`tel:${selectedCenter.contact.replace(/[^+\d]/g, '')}`)}
+              disabled={!selectedCenter.contact}
+              style={{ flex: 1 }}
             />
           </View>
         </Card>
@@ -148,14 +123,6 @@ export default function CentersScreen() {
                       <Phone size={12} color={theme.inkMuted} />
                       <Text style={[styles.phoneText, { color: theme.inkMuted }]}>{c.contact}</Text>
                     </View>
-                  </View>
-                  <View style={styles.centerRight}>
-                    <Pressable
-                      style={[styles.directionsIcon, { backgroundColor: theme.crimsonLight }]}
-                      onPress={() => openDirections(c.latitude, c.longitude, c.name)}
-                    >
-                      <Navigation size={18} color={theme.crimson} />
-                    </Pressable>
                   </View>
                 </View>
               </Card>
@@ -179,22 +146,16 @@ const styles = StyleSheet.create({
 
   // Active center card styles
   activeCard: { gap: spacing.sm },
+  activeActions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.xs },
   activeHeader: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   activeTag: { ...typography.eyebrow, fontSize: 10, fontWeight: '800' },
-  btnRow: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.xs },
-  actionBtn: { flex: 1 },
+
 
   // List card styles
   centerCard: { padding: spacing.md },
   centerRow: { flexDirection: 'row', alignItems: 'center' },
-  centerRight: { paddingLeft: spacing.md },
-  directionsIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+
+
   phoneRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 },
   phoneText: { ...typography.caption },
   name: { ...typography.bodyStrong },

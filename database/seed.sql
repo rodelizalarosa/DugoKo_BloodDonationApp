@@ -61,40 +61,124 @@ VALUES
   )
 ON CONFLICT (id) DO NOTHING;
 
--- 3. Insert FAQs
-INSERT INTO public.faq (id, question, answer, keywords, category)
+-- 3. Insert Blood Requests for the Home / Community feed
+INSERT INTO public.blood_requests (
+  id, hospital, address, blood_type_needed, units_needed, units_pledged,
+  urgency_level, needed_by, status, notes, posted_by
+)
+VALUES
+  (
+    'b1000000-0000-0000-0000-000000000001',
+    'Cebu City Medical Center',
+    'Natalio B. Bacalso Ave, Cebu City',
+    'O-',
+    12,
+    3,
+    'critical',
+    '2026-06-24 12:00:00+08',
+    'open',
+    'Urgent trauma case. Walk-in donors appreciated if eligible.',
+    NULL
+  ),
+  (
+    'b2000000-0000-0000-0000-000000000002',
+    'Perpetual Succour Hospital',
+    'Fuente Osmena, Cebu City',
+    'A+',
+    6,
+    1,
+    'urgent',
+    '2026-06-28 17:00:00+08',
+    'open',
+    'Shortage for scheduled surgeries later this week.',
+    NULL
+  )
+ON CONFLICT (id) DO NOTHING;
+
+-- 4. Insert Community Posts for the Home feed
+INSERT INTO public.community_posts (
+  type, author_id, author_name, author_avatar_url, title, body, related_request_id
+)
+VALUES
+  (
+    'request',
+    NULL,
+    'Cebu City Medical Center',
+    NULL,
+    'Blood Needed: O- at Cebu City Medical Center',
+    'Urgent request for 12 units of O- blood for a trauma patient.',
+    'b1000000-0000-0000-0000-000000000001'
+  ),
+  (
+    'announcement',
+    NULL,
+    'Philippine Red Cross Cebu',
+    NULL,
+    'Weekend Donor Drive Reminder',
+    'Bring a valid ID, hydrate well, and eat a light meal before donating this weekend.',
+    NULL
+  ),
+  (
+    'story',
+    NULL,
+    'Anonymous Donor',
+    NULL,
+    'A first donation that made a difference',
+    'One donation can support multiple patients and start a lifelong habit of helping.',
+    NULL
+  )
+ON CONFLICT (id) DO NOTHING;
+
+-- 5. Insert FAQs
+INSERT INTO public.faq (id, question, answer, keywords, category, source_title, source_url, last_verified_at, is_active)
 VALUES
   (
     'f1000000-0000-0000-0000-000000000001',
     'Can I donate after getting a tattoo?',
     'You need to wait at least 6 months after getting a tattoo or piercing from an unlicensed facility before donating blood, per Philippine Red Cross guidelines. Licensed, sterile facilities may shorten this window — check with your nearest PRC chapter.',
     ARRAY['tattoo', 'piercing', 'wait', 'deferral'],
-    'Eligibility'
+    'Eligibility',
+    'Philippine Red Cross Blood Donation Guidance',
+    'https://redcross.org.ph/',
+    '2026-06-22',
+    TRUE
   ),
   (
     'f2000000-0000-0000-0000-000000000002',
     'How often can I donate blood?',
     'Whole blood donors can give again after 3 months (12 weeks) for men, and 4 months (16 weeks) for women, to allow the body to fully replenish red blood cells.',
     ARRAY['frequency', 'how often', 'interval'],
-    'Eligibility'
+    'Eligibility',
+    'Philippine Red Cross Blood Donation Guidance',
+    'https://redcross.org.ph/',
+    '2026-06-22',
+    TRUE
   ),
   (
     'f3000000-0000-0000-0000-000000000003',
     'What should I eat before donating?',
     'Eat a balanced, iron-rich meal and drink plenty of water before your donation. Avoid fatty foods, as they can affect blood test results. Do not donate on an empty stomach.',
     ARRAY['food', 'eat', 'preparation', 'before'],
-    'Preparation'
+    'Preparation',
+    'Philippine Red Cross Blood Donation Guidance',
+    'https://redcross.org.ph/',
+    '2026-06-22',
+    TRUE
   ),
   (
     'f4000000-0000-0000-0000-000000000004',
     'Can I donate while on medication?',
     'It depends on the medication. Most maintenance medications for stable conditions are fine, but antibiotics, blood thinners, and some other drugs require a waiting period. A PRC screening nurse will assess this on-site.',
     ARRAY['medication', 'medicine', 'drugs'],
-    'Eligibility'
+    'Eligibility',
+    'Philippine Red Cross Blood Donation Guidance',
+    'https://redcross.org.ph/',
+    '2026-06-22',
+    TRUE
   )
 ON CONFLICT (id) DO NOTHING;
 
--- 4. Insert Learn Articles
+-- 6. Insert Learn Articles
 INSERT INTO public.learn_articles (id, title, category, summary, read_minutes, cover_emoji, content)
 VALUES
   (

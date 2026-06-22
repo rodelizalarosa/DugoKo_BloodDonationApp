@@ -3,7 +3,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import type { CommunityPost, BloodRequest } from '@/types';
 import { mapCommunityPost, mapBloodRequest } from '@/lib/mappers';
-import type { InsertBloodRequest, InsertCommunityPost } from '@/lib/supabase-types';
+import type { BloodType, UrgencyLevel, InsertBloodRequest, InsertCommunityPost } from '@/lib/supabase-types';
 
 export function useCommunity() {
   const { session, profile } = useAuth();
@@ -72,10 +72,11 @@ export function useCommunity() {
     async (
       hospital: string,
       address: string,
-      bloodTypeNeeded: any,
+      bloodTypeNeeded: BloodType,
       unitsNeeded: number,
-      urgencyLevel: any,
-      notes?: string
+      urgencyLevel: UrgencyLevel,
+      notes?: string,
+      neededBy?: string | null
     ): Promise<{ error: string | null }> => {
       if (!userId) return { error: 'Not authenticated' };
 
@@ -87,6 +88,7 @@ export function useCommunity() {
         units_needed: unitsNeeded,
         urgency_level: urgencyLevel,
         status: 'open',
+        needed_by: neededBy || null,
         notes: notes || null,
         posted_by: userId,
       };
@@ -129,34 +131,22 @@ export function useCommunity() {
   );
 
   const pledgeRequest = useCallback(
-    async (requestId: string): Promise<{ error: string | null }> => {
+    async (
+      requestId: string,
+      helperInfo?: { helper_name: string; helper_contact: string; helper_email: string }
+    ): Promise<{ error: string | null }> => {
       if (!userId) return { error: 'Not authenticated' };
 
-      // 1. Insert into request_responses
-      const { error: pledgeError } = await supabase
-        .from('request_responses')
-        .insert({
-          request_id: requestId,
-          user_id: userId,
+      const { data, error: pledgeError } = await supabase
+        .rpc('pledge_request', {
+          p_request_id: requestId,
+          p_helper_name: helperInfo?.helper_name || null,
+          p_helper_contact: helperInfo?.helper_contact || null,
+          p_helper_email: helperInfo?.helper_email || null,
         });
 
-      if (pledgeError) {
-        return { error: pledgeError.message };
-      }
-
-      // 2. Increment units_pledged in blood_requests
-      const { data: currentReq } = await supabase
-        .from('blood_requests')
-        .select('units_pledged')
-        .eq('id', requestId)
-        .single();
-
-      const newPledgesCount = (currentReq?.units_pledged || 0) + 1;
-
-      await supabase
-        .from('blood_requests')
-        .update({ units_pledged: newPledgesCount })
-        .eq('id', requestId);
+      if (pledgeError) return { error: pledgeError.message };
+      if ((data as any)?.error) return { error: (data as any).error };
 
       await fetchCommunityData();
       return { error: null };

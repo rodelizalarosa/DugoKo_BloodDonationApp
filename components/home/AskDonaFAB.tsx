@@ -1,5 +1,5 @@
 import { MessageCircleHeart, Search, Send, X } from 'lucide-react-native';
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   FlatList,
   Modal,
@@ -10,72 +10,143 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { useLearn } from '@/lib/hooks/useLearn';
 import { radius, spacing, typography } from '@/constants/theme';
 import { FaqItem } from '@/types';
 import { useTheme } from '@/context/ThemeContext';
-
-const DONA_KNOWLEDGE: FaqItem[] = [
-  {
-    id: 'k1',
-    question: 'What are the general eligibility requirements?',
-    answer: '👉 Age: 16–65 (16–17 needs parental consent)\n👉 Weight: At least 50 kg (110 lbs)\n👉 Health: Good general health\n👉 Lifestyle: No high-risk behaviors.',
-    keywords: ['eligibility', 'age', 'weight', 'requirements', 'can i donate'],
-    category: 'General'
-  },
-  {
-    id: 'k2',
-    question: 'How should I prepare before donating?',
-    answer: '✅ Sleep: At least 5–6 hours\n✅ Meal: Light meal (avoid fatty foods)\n✅ Hydration: Drink plenty of water\n✅ Alcohol: None in last 24 hours\n✅ Tattoos/Piercings: Wait 6–12 months.',
-    keywords: ['prepare', 'sleep', 'food', 'eat', 'alcohol', 'tattoo'],
-    category: 'Preparation'
-  },
-  {
-    id: 'k3',
-    question: 'When might I be temporarily deferred?',
-    answer: '🕒 You may wait if you have a fever, cough, infection, recently had surgery, dental extraction, took certain meds, or traveled to high-risk areas.',
-    keywords: ['deferred', 'sick', 'travel', 'medication', 'surgery'],
-    category: 'Medical'
-  },
-  {
-    id: 'k4',
-    question: 'When is donation permanently restricted?',
-    answer: '❌ Serious illnesses (heart disease, certain cancers) or testing positive for HIV or Hepatitis B/C lead to permanent deferral.',
-    keywords: ['permanent', 'illness', 'hiv', 'hepatitis', 'cancer'],
-    category: 'Medical'
-  },
-  {
-    id: 'k5',
-    question: 'What is the donation interval?',
-    answer: '🩸 Donation Interval:\nMen: Every 3 months\nWomen: Every 4 months',
-    keywords: ['interval', 'how often', 'wait', 'next'],
-    category: 'General'
-  }
-];
 
 interface ChatTurn {
   id: string;
   question: string;
   answer: string;
+  source: 'ai' | 'faq';
+  sourceTitle?: string;
+  sourceUrl?: string;
+}
+
+async function askDonaAi(question: string, context: string): Promise<string | null> {
+  const apiKey = process.env.EXPO_PUBLIC_GROQ_API_KEY;
+  const model = process.env.EXPO_PUBLIC_GROQ_MODEL || 'llama-3.1-8b-instant';
+  if (!apiKey) return null;
+
+  const prompt = [
+    'You are Dona, a Philippine Red Cross blood donation assistant.',
+    'Answer only from the approved context below.',
+    'If the approved context is insufficient, say you do not have an approved answer.',
+    'Keep the response short, accurate, and friendly.',
+    'Always end with: General information only. Not a medical diagnosis.',
+    '',
+    'Approved context:',
+    context || 'No approved context matched.',
+    '',
+    `User question: ${question}`,
+  ].join('\n');
+
+  try {
+    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: 'system', content: 'You are a precise assistant for blood donation guidance.' },
+          { role: 'user', content: prompt },
+        ],
+        temperature: 0.2,
+        max_tokens: 220,
+      }),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data?.choices?.[0]?.message?.content ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function normalize(text: string) {
+  return text.toLowerCase().replace(/[^a-z0-9+ ]/g, ' ');
+}
+
+function scoreFaq(item: FaqItem, query: string) {
+  const q = normalize(query);
+  const haystack = normalize(`${item.question} ${item.answer} ${item.keywords.join(' ')}`);
+  let score = 0;
+  if (haystack.includes(q.trim())) score += 8;
+  for (const token of q.split(/\s+/).filter(Boolean)) {
+    if (haystack.includes(token)) score += 1;
+  }
+  return score;
 }
 
 export function AskDonaFAB() {
+  const { searchFaq } = useLearn();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [thread, setThread] = useState<ChatTurn[]>([]);
+  const [searchResults, setSearchResults] = useState<FaqItem[]>([]);
+  const [isThinking, setIsThinking] = useState(false);
   const { theme } = useTheme();
 
-  const results = useMemo(() => {
-    if (!query.trim()) return [];
-    const q = query.toLowerCase();
-    return DONA_KNOWLEDGE.filter(
-      (f) =>
-        f.question.toLowerCase().includes(q) ||
-        f.keywords.some((k) => k.toLowerCase().includes(q))
-    );
-  }, [query]);
+  useEffect(() => {
+    let cancelled = false;
 
-  function askPredefined(faq: FaqItem) {
-    setThread((prev) => [...prev, { id: `${faq.id}-${Date.now()}`, question: faq.question, answer: faq.answer }]);
+    async function runSearch() {
+      if (!query.trim()) {
+        setSearchResults([]);
+        return;
+      }
+
+      const dbResults = await searchFaq(query.trim());
+      const ranked = [...dbResults]
+        .sort((a, b) => scoreFaq(b, query) - scoreFaq(a, query))
+        .slice(0, 5);
+
+      if (!cancelled) setSearchResults(ranked);
+    }
+
+    void runSearch();
+    return () => {
+      cancelled = true;
+    };
+  }, [query, searchFaq]);
+
+  async function ask(question: string) {
+    setIsThinking(true);
+    const dbResults = await searchFaq(question);
+    const ranked = [...dbResults]
+      .sort((a, b) => scoreFaq(b, question) - scoreFaq(a, question))
+      .slice(0, 3);
+
+    const context = ranked
+      .map((item, index) => {
+        const sourceLine = item.sourceTitle ? `Source: ${item.sourceTitle}` : '';
+        return `${index + 1}. Q: ${item.question}\nA: ${item.answer}${sourceLine ? `\n${sourceLine}` : ''}`;
+      })
+      .join('\n\n');
+
+    const aiAnswer = await askDonaAi(question, context);
+    const top = ranked[0];
+    const answer =
+      aiAnswer ||
+      top?.answer ||
+      'I do not have an approved answer for that yet. Please check with Philippine Red Cross screening staff.';
+
+    setThread((prev) => [
+      ...prev,
+      {
+        id: `turn-${Date.now()}`,
+        question,
+        answer,
+        source: aiAnswer ? 'ai' : 'faq',
+        sourceTitle: top?.sourceTitle,
+        sourceUrl: top?.sourceUrl,
+      },
+    ]);
+    setIsThinking(false);
     setQuery('');
   }
 
@@ -94,8 +165,10 @@ export function AskDonaFAB() {
           <View style={[styles.sheet, { backgroundColor: theme.paper }]}>
             <View style={styles.sheetHeader}>
               <View>
-                <Text style={[styles.sheetTitle, { color: theme.ink }]}>Ask Dona</Text>
-                <Text style={[styles.sheetSubtitle, { color: theme.inkMuted }]}>Trusted answers from Philippine Red Cross guidelines</Text>
+                <Text style={[styles.sheetTitle, { color: theme.ink }]}>Ask Dona AI</Text>
+                <Text style={[styles.sheetSubtitle, { color: theme.inkMuted }]}>
+                  Blood donation guidance based on approved Philippine Red Cross content
+                </Text>
               </View>
               <Pressable onPress={close} hitSlop={10}>
                 <X size={22} color={theme.inkMuted} />
@@ -105,7 +178,7 @@ export function AskDonaFAB() {
             <ScrollView style={styles.thread} contentContainerStyle={{ gap: spacing.md }}>
               {thread.length === 0 && (
                 <Text style={[styles.emptyHint, { color: theme.inkMuted }]}>
-                  Search a keyword below, like "tattoo" or "medication", to get a trusted answer.
+                  Ask about blood donation, eligibility, preparation, or what to do next. General information only. Not a medical diagnosis.
                 </Text>
               )}
               {thread.map((turn) => (
@@ -116,12 +189,19 @@ export function AskDonaFAB() {
                   <View style={[styles.bubbleDona, { backgroundColor: theme.surface, borderColor: theme.border }]}>
                     <Text style={[styles.bubbleDonaText, { color: theme.ink }]}>{turn.answer}</Text>
                     <Text style={[styles.disclaimer, { color: theme.inkFaint }]}>
-                      ⓘ General information only — not a medical diagnosis. Final eligibility is
-                      determined by PRC screening staff on-site.
+                      General information only. Not a medical diagnosis.
                     </Text>
+                    {turn.sourceTitle ? (
+                      <Text style={[styles.source, { color: theme.inkFaint }]}>
+                        Source: {turn.sourceTitle}
+                      </Text>
+                    ) : null}
                   </View>
                 </View>
               ))}
+              {isThinking && (
+                <Text style={[styles.emptyHint, { color: theme.inkMuted }]}>Dona is thinking...</Text>
+              )}
             </ScrollView>
 
             <View style={[styles.searchRow, { backgroundColor: theme.surface, borderColor: theme.border }]}>
@@ -129,21 +209,28 @@ export function AskDonaFAB() {
               <TextInput
                 value={query}
                 onChangeText={setQuery}
-                placeholder="Search a question or keyword…"
+                placeholder="Ask Dona about blood donation..."
                 placeholderTextColor={theme.inkFaint}
                 style={[styles.input, { color: theme.ink }]}
+                onSubmitEditing={() => query.trim() && ask(query.trim())}
+                returnKeyType="send"
               />
-              <Send size={18} color={theme.crimson} />
+              <Pressable onPress={() => query.trim() && ask(query.trim())}>
+                <Send size={18} color={theme.crimson} />
+              </Pressable>
             </View>
 
-            {results.length > 0 && (
+            {searchResults.length > 0 && (
               <FlatList
-                data={results}
+                data={searchResults}
                 keyExtractor={(item) => item.id}
                 style={{ maxHeight: 160 }}
                 renderItem={({ item }) => (
-                  <Pressable style={[styles.resultRow, { borderBottomColor: theme.border }]} onPress={() => askPredefined(item)}>
+                  <Pressable style={[styles.resultRow, { borderBottomColor: theme.border }]} onPress={() => ask(item.question)}>
                     <Text style={[styles.resultText, { color: theme.ink }]}>{item.question}</Text>
+                    {item.sourceTitle ? (
+                      <Text style={[styles.resultSource, { color: theme.inkFaint }]}>{item.sourceTitle}</Text>
+                    ) : null}
                   </Pressable>
                 )}
               />
@@ -165,10 +252,7 @@ const styles = StyleSheet.create({
     borderRadius: 28,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
+    boxShadow: '0 4px 10px rgba(0, 0, 0, 0.1)',
     elevation: 5,
   },
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
@@ -203,6 +287,7 @@ const styles = StyleSheet.create({
   },
   bubbleDonaText: { ...typography.body },
   disclaimer: { ...typography.caption, marginTop: spacing.sm },
+  source: { ...typography.caption, marginTop: spacing.xs, fontStyle: 'italic' },
   searchRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -215,4 +300,5 @@ const styles = StyleSheet.create({
   input: { flex: 1, ...typography.body },
   resultRow: { paddingVertical: spacing.sm, borderBottomWidth: 1 },
   resultText: { ...typography.body },
+  resultSource: { ...typography.caption, marginTop: 2 },
 });

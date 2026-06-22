@@ -10,8 +10,6 @@ import {
   Modal,
   TextInput,
   TouchableOpacity,
-  Linking,
-  Platform,
   ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -93,29 +91,11 @@ export default function EventDetailsScreen() {
 
   const formValid = contact.trim().length >= 7 && declHealthy && declMeds && declConsent;
 
-  const openDirections = (lat?: number, lng?: number, label?: string) => {
-    if (!lat || !lng) return;
-    const latLng = `${lat},${lng}`;
-    const iosUrl = `maps:0,0?q=${encodeURIComponent(label || '')}@${latLng}`;
-    const androidUrl = `geo:0,0?q=${latLng}(${encodeURIComponent(label || '')})`;
-    const webUrl = `https://www.google.com/maps/search/?api=1&query=${latLng}`;
-
-    const url = Platform.select({
-      ios: iosUrl,
-      android: androidUrl,
-      default: webUrl,
-    });
-
-    Linking.openURL(url).catch(() => {
-      Linking.openURL(webUrl);
-    });
-  };
-
   const handleRegister = async () => {
     if (!event) return;
     setIsSubmitting(true);
-    // Persist RSVP to Supabase
-    const { error } = await rsvpEvent(event.id, 'going', selectedTimeSlot);
+    // Persist RSVP to Supabase with health declarations
+    const { error } = await rsvpEvent(event.id, 'going', selectedTimeSlot, contact, declHealthy, declMeds, declConsent);
     setIsSubmitting(false);
     if (!error) {
       setIsSuccess(true);
@@ -179,12 +159,6 @@ export default function EventDetailsScreen() {
             </View>
           )}
 
-          <Button
-            label="Get Directions"
-            variant="outline"
-            onPress={() => openDirections(event.latitude, event.longitude, event.title)}
-            style={{ marginTop: spacing.sm }}
-          />
         </Card>
 
         <Text style={[styles.sectionLabel, { color: theme.ink }]}>About this drive</Text>
@@ -202,7 +176,17 @@ export default function EventDetailsScreen() {
             <Button
               label="Log Donation"
               variant="outline"
-              onPress={() => router.push('/donate/log')}
+              onPress={() =>
+                router.push({
+                  pathname: '/donate/log',
+                  params: {
+                    eventId: event.id,
+                    date: event.date,
+                    venue: event.venue,
+                    branch: event.organizer,
+                  },
+                })
+              }
               style={{ marginTop: spacing.md }}
             />
           </Card>

@@ -5,7 +5,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Card } from '@/components/ui/Card';
 import { ScreenHeader } from '@/components/ui/ScreenHeader';
 import { radius, spacing, typography } from '@/constants/theme';
-import { mockInsight, mockDonations } from '@/constants/mockData';
 import { formatDate } from '@/lib/eligibility';
 import { useTheme } from '@/context/ThemeContext';
 import { useDonorInsights } from '@/lib/hooks/useDonorInsights';
@@ -16,8 +15,13 @@ export default function InsightDetailScreen() {
   const { insights } = useDonorInsights();
   const { donations } = useDonations();
 
-  const currentInsight = insights || mockInsight;
-  const historyList = donations.length > 0 ? donations : mockDonations;
+  const currentInsight = insights ?? {
+    totalDonations: 0,
+    estimatedLivesImpacted: 0,
+    donationStreak: 0,
+    nextWindowDate: null,
+  };
+  const historyList = donations;
 
   const mockQuotes = [
     "Your blood is a gift of life. Every drop counts toward someone's tomorrow.",

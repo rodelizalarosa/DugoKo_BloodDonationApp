@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import { Award, ChevronRight, Clock, FileText, LogOut, Settings, UserCog, Camera, Trash2, X } from 'lucide-react-native';
+import { Award, ChevronRight, Clock, FileText, LogOut, Settings, UserCog, Camera, Trash2, X, Shield } from 'lucide-react-native';
 import React, { useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View, Modal, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -7,12 +7,21 @@ import { Card } from '@/components/ui/Card';
 import { radius, spacing, typography } from '@/constants/theme';
 import { useTheme } from '@/context/ThemeContext';
 
-const menu = [
-  { key: 'edit', label: 'Edit Profile', icon: UserCog, href: '/profile/edit' as const },
-  { key: 'history', label: 'Donation History', icon: Clock, href: '/profile/history' as const },
-  { key: 'settings', label: 'Settings', icon: Settings, href: '/profile/settings' as const },
-  { key: 'logout', label: 'Logout', icon: LogOut, href: '/auth/login' as const },
-];
+// Role-based menu items: admin/moderator users get an extra Admin Panel entry
+function buildMenu(isAdminOrMod: boolean) {
+  const items: Array<{ key: string; label: string; icon: any; href: string }> = [
+    { key: 'edit', label: 'Edit Profile', icon: UserCog, href: '/profile/edit' },
+    { key: 'history', label: 'Donation History', icon: Clock, href: '/profile/history' },
+    { key: 'settings', label: 'Settings', icon: Settings, href: '/profile/settings' },
+  ];
+
+  if (isAdminOrMod) {
+    items.push({ key: 'admin', label: 'Admin Panel', icon: Shield, href: '/admin/index' });
+  }
+
+  items.push({ key: 'logout', label: 'Logout', icon: LogOut, href: '/auth/login' });
+  return items;
+}
 
 const donorLevels = [
   { level: 'New Donor', requirement: '1st donation', color: '#94A3B8' },
@@ -28,7 +37,7 @@ export default function ProfileScreen() {
   const router = useRouter();
   const { theme, isDarkMode } = useTheme();
   const { profile, isLoading } = useProfile();
-  const { signOut } = useAuth();
+  const { signOut, isAdmin, isModerator } = useAuth();
   const [showLevelModal, setShowLevelModal] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
 
@@ -96,7 +105,7 @@ export default function ProfileScreen() {
         </View>
 
         <Card style={{ padding: 0, overflow: 'hidden' }}>
-          {menu.map((item, idx) => (
+          {buildMenu(isAdmin || isModerator).map((item, idx, arr) => (
             <Pressable
               key={item.key}
               onPress={() => {
@@ -106,7 +115,7 @@ export default function ProfileScreen() {
                 }
                 router.push(item.href as any);
               }}
-              style={[styles.menuRow, idx !== menu.length - 1 && [styles.menuRowBorder, { borderBottomColor: theme.border }]]}
+              style={[styles.menuRow, idx !== arr.length - 1 && [styles.menuRowBorder, { borderBottomColor: theme.border }]]}
             >
               <View style={styles.menuLeft}>
                 <item.icon size={18} color={theme.crimson} />
@@ -227,10 +236,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 4,
     borderColor: '#FFF',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
+    boxShadow: '0 4px 10px rgba(0, 0, 0, 0.1)',
     elevation: 8,
   },
   avatarInitial: { ...typography.display, fontSize: 40 },
@@ -251,10 +257,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: 'rgba(0,0,0,0.05)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
     elevation: 4,
   },
   name: { ...typography.h1, marginTop: spacing.lg },

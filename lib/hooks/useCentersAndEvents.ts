@@ -38,7 +38,15 @@ export function useCentersAndEvents() {
   }, [fetchData]);
 
   const rsvpEvent = useCallback(
-    async (eventId: string, status: RsvpStatus, timeSlot?: string): Promise<{ error: string | null }> => {
+    async (
+      eventId: string,
+      status: RsvpStatus,
+      timeSlot?: string,
+      contactNumber?: string,
+      declHealthy?: boolean,
+      declNoMeds14d?: boolean,
+      declConsent?: boolean
+    ): Promise<{ error: string | null }> => {
       if (!userId) return { error: 'Not authenticated' };
 
       const { error: upsertError } = await supabase
@@ -49,6 +57,10 @@ export function useCentersAndEvents() {
             user_id: userId,
             status,
             time_slot: timeSlot || null,
+            contact_number: contactNumber || null,
+            decl_healthy: declHealthy ?? false,
+            decl_no_meds_14d: declNoMeds14d ?? false,
+            decl_consent: declConsent ?? false,
           },
           { onConflict: 'event_id,user_id' }
         );

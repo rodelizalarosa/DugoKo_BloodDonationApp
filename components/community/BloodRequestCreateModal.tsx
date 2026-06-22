@@ -7,6 +7,7 @@ import {
   BloodRequestDraft,
   BloodRequestFormValidation,
   deriveTriageFromNeededWhen,
+  parseNeededByInput,
   validateBloodRequestDraft,
   coerceUnits,
 } from '@/lib/communityPosting';
@@ -76,6 +77,7 @@ export function BloodRequestCreateModal({
     address: string;
     bloodTypeNeeded: BloodType;
     unitsNeeded: number;
+    neededBy: string | null;
     triageUrgencyLevel: 'critical' | 'urgent' | 'moderate';
   }) => void;
   requesterEligibility: { status: 'eligible' | 'deferred' | 'not_eligible'; daysRemaining?: number };
@@ -156,6 +158,7 @@ export function BloodRequestCreateModal({
       address: draft.address.trim(),
       bloodTypeNeeded: draft.bloodTypeNeeded,
       unitsNeeded: draft.unitsNeeded,
+      neededBy: parseNeededByInput(draft.neededWhenInput),
       triageUrgencyLevel: triage.urgencyLevel,
     });
 
@@ -170,7 +173,7 @@ export function BloodRequestCreateModal({
           <View style={[styles.modal, { backgroundColor: theme.surface, borderColor: theme.border }]}>
             <Text style={[styles.title, { color: theme.ink }]}>Create blood request</Text>
             <Text style={[styles.subtitle, { color: theme.inkMuted }]}>
-              Required fields are marked; urgency is auto-derived from “when blood is needed”.
+              Required fields are marked; urgency is derived from when blood is needed.
             </Text>
 
             {requesterEligibility.status !== 'eligible' && (
@@ -248,7 +251,7 @@ export function BloodRequestCreateModal({
               </Field>
 
               <View style={[styles.triageBox, { borderColor: theme.border }]}>
-                <Text style={[styles.triageTitle, { color: theme.ink }]}>AI triage preview</Text>
+                <Text style={[styles.triageTitle, { color: theme.ink }]}>Urgency preview</Text>
                 <Text style={[styles.triageValue, { color: theme.crimson }]}>{triage.triageLabel}</Text>
                 <Text style={[styles.triageReason, { color: theme.inkMuted }]}>{triage.triageReason}</Text>
               </View>

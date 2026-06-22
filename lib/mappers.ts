@@ -21,21 +21,44 @@ import type {
 
 export function mapUser(row: UserRow): User {
   const names = row.full_name ? row.full_name.trim().split(/\s+/) : [];
-  const firstName = names[0] || '';
-  const lastName = names.slice(1).join(' ') || '';
+  let firstName = names[0] || '';
+  let middleName = '';
+  let lastName = '';
+
+  if (names.length === 2) {
+    // If the second token is a single letter, treat it as a middle initial, not a last name
+    if (names[1].length === 1) {
+      middleName = names[1];
+    } else {
+      lastName = names[1];
+    }
+  } else if (names.length >= 3) {
+    // Single-letter token after first name = middle initial
+    if (names[1].length === 1) {
+      middleName = names[1];
+      lastName = names.slice(2).join(' ');
+    } else {
+      lastName = names.slice(1).join(' ');
+    }
+  }
 
   return {
     id: row.id,
     firstName,
+    middleName: middleName || undefined,
     lastName,
     email: row.email || '',
+    phone: row.phone || undefined,
     bloodType: row.blood_type,
     birthdate: row.birthdate,
     weightKg: row.weight_kg ? Number(row.weight_kg) : null,
+    sex: row.sex || undefined,
+    eligibilityStatus: row.eligibility_status,
     donorLevel: row.donor_level,
     totalDonations: row.total_donations,
     lastDonationDate: row.last_donation_date,
     profileComplete: row.profile_complete,
+    themePreference: row.theme_preference,
     avatarUrl: row.avatar_url || undefined,
   };
 }
@@ -113,10 +136,13 @@ export function mapDonation(row: DonationRow): Donation {
   return {
     id: row.id,
     userId: row.user_id,
+    eventId: row.event_id,
     date: row.date,
     venue: row.venue,
     branch: row.branch,
     bloodBagRef: row.blood_bag_ref || undefined,
+    donorId: row.donor_id || undefined,
+    isVerified: row.is_verified,
     bloodPressure: row.blood_pressure || undefined,
     hemoglobin: row.hemoglobin || undefined,
     pulse: row.pulse || undefined,

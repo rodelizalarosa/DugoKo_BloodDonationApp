@@ -3,7 +3,7 @@
  * ─────────────────────────────────────────────────────────────────
  * Hook to read and update the current user's profile from public.users.
  */
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import type { UpdateUserProfile } from '@/lib/supabase-types';
 import type { User } from '@/types';
@@ -38,8 +38,12 @@ export function useProfile(): UseProfileReturn {
     setIsLoading(false);
   }, [refreshProfile]);
 
+  const profile = useMemo(() => {
+    return authProfile ? mapUser(authProfile) : null;
+  }, [authProfile]);
+
   return {
-    profile:  authProfile ? mapUser(authProfile) : null,
+    profile,
     isLoading,
     error,
     updateProfile,

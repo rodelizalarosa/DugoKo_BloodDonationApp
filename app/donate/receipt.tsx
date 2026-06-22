@@ -55,7 +55,10 @@ export default function ReceiptScreen() {
         date,
         venue,
         branch,
+        eventId: null,
         bloodBagRef,
+        donorId,
+        isVerified: isVerified === 'true',
         bloodPressure: bp,
         hemoglobin,
         pulse,
@@ -76,7 +79,7 @@ export default function ReceiptScreen() {
     );
   }
 
-  const eligibility = calculateEligibility(donation.date);
+  const eligibility = calculateEligibility(donation.date, profile?.sex);
 
 
   const handleBack = () => {
@@ -87,8 +90,8 @@ export default function ReceiptScreen() {
     }
   };
 
-  const isVerifiedRecord = !date || isVerified === 'true';
-  const resolvedDonorId = date ? (donorId ?? null) : 'PRC-09-88123';
+  const isVerifiedRecord = date ? isVerified === 'true' : !!donation.isVerified;
+  const resolvedDonorId = date ? (donorId ?? null) : donation.donorId ?? null;
   const backLabel = id ? 'Back to History' : 'Back to Donate';
 
   return (
@@ -119,9 +122,11 @@ export default function ReceiptScreen() {
               <Clock size={16} color={theme.amber} />
               <View style={{ flex: 1 }}>
                 <Text style={[styles.badgeTitle, { color: theme.amber }]}>VERIFICATION PENDING</Text>
-                <Text style={[styles.badgeSubtext, { color: theme.amber }]}>
-                  Self-logged. Red Cross is verifying card photo (takes 3–5 days).
-                </Text>
+<Text style={[styles.badgeSubtext, { color: theme.amber }]}>
+                   {donation.eventId
+                     ? 'Red Cross is verifying card photo (takes 3-5 days).'
+                     : 'Self-logged. Red Cross is verifying card photo (takes 3-5 days). Subject for review.'}
+                 </Text>
               </View>
             </View>
           )}
@@ -176,6 +181,7 @@ export default function ReceiptScreen() {
 
               await Print.printAsync({ html });
             }}
+            disabled={!isVerifiedRecord}
             fullWidth
           />
 
@@ -208,6 +214,7 @@ export default function ReceiptScreen() {
                 await Sharing.shareAsync(targetUri);
               }
             }}
+            disabled={!isVerifiedRecord}
             fullWidth
           />
 
@@ -260,9 +267,9 @@ function Divider() {
 function escapeHtml(s: string) {
   return s
     .replace(/&/g, '&amp;')
-    .replace(/</g, '<')
-    .replace(/>/g, '>')
-    .replace(/"/g, '"')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
 }
 
@@ -277,10 +284,10 @@ function buildReceiptHtml(params: {
   verified: boolean;
   donorId: string | null;
 }) {
-  const statusLine = params.verified ? 'VERIFIED RED CROSS RECORD' : 'VERIFICATION PENDING';
-  const donorIdLine = params.verified
-    ? `Donor ID: ${params.donorId ?? '—'}`
-    : 'Self-logged. PRC verification pending.';
+const statusLine = params.verified ? 'VERIFIED RED CROSS RECORD' : 'VERIFICATION PENDING';
+   const donorIdLine = params.verified
+     ? `Donor ID: ${params.donorId ?? '—'}`
+     : 'Self-logged. PRC verification pending. Subject for review.';
 
   return `
 <!doctype html>

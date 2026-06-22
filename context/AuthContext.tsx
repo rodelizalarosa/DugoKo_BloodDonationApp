@@ -74,15 +74,44 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // ── Fetch profile row from public.users ──────────────────────────
   const fetchProfile = useCallback(async (userId: string) => {
+    // Use get_my_profile() RPC (SECURITY DEFINER) to bypass RLS during auth bootstrap.
+    // Direct table select can fail with 403 if RLS policies are not yet fully configured.
     const { data, error } = await supabase
-      .from('users')
-      .select('*')
-      .eq('id', userId)
-      .single();
+      .rpc('get_my_profile')
+      .maybeSingle();
 
     if (!error && data) {
       setProfile(data as UserRow);
+      setIsLoading(false);
+      return;
     }
+
+    if (error) {
+      // Fallback: try direct table query in case the RPC doesn't exist yet
+      // (old DB state before schema update)
+      const { data: fallback, error: fallbackError } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', userId)
+        .maybeSingle();
+
+      if (!fallbackError && fallback) {
+        setProfile(fallback as UserRow);
+        setIsLoading(false);
+        return;
+      }
+
+      // If the profile fetch fails, keep the session alive and allow the app to
+      // show fallback UI rather than logging the user out.
+      console.error('[Auth] Failed to fetch profile:', error.code, error.message);
+      setProfile(null);
+      setIsLoading(false);
+      return;
+    }
+
+    // No rows returned is not the same as an invalid session.
+    setProfile(null);
+    setIsLoading(false);
   }, []);
 
   const refreshProfile = useCallback(async () => {
@@ -125,8 +154,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     email: string,
     password: string
   ): Promise<{ error: string | null }> => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    return { error: error?.message ?? null };
+    const normalizedEmail = email.trim().toLowerCase();
+
+    const { data: emailExists, error: emailCheckError } = await supabase.rpc('email_exists', {
+      p_email: normalizedEmail,
+    });
+
+    if (!emailCheckError && emailExists === false) {
+      return { error: 'EMAIL_NOT_REGISTERED' };
+    }
+
+    const { error } = await supabase.auth.signInWithPassword({ email: normalizedEmail, password });
+
+    if (!error) return { error: null };
+
+    const msg = error.message.toLowerCase();
+    if (msg.includes('email not confirmed')) return { error: 'EMAIL_NOT_CONFIRMED' };
+    if (msg.includes('invalid login credentials') || msg.includes('user not found')) {
+      if (emailCheckError) {
+        const { data: retryExists } = await supabase.rpc('email_exists', {
+          p_email: normalizedEmail,
+        });
+
+        if (retryExists === false) {
+          return { error: 'EMAIL_NOT_REGISTERED' };
+        }
+      }
+
+      return { error: 'INVALID_LOGIN_CREDENTIALS' };
+    }
+
+    return { error: error.message };
   };
 
   const signUp = async (
@@ -221,10 +279,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   ): Promise<{ error: string | null }> => {
     if (!session?.user?.id) return { error: 'Not authenticated' };
 
-    const { error } = await supabase
-      .from('users')
-      .update(data)
-      .eq('id', session.user.id);
+    // Use update_my_profile RPC (SECURITY DEFINER) to bypass RLS for profile updates.
+    // Direct table PATCH can return 403 if RLS policies are restrictive.
+    const { error } = await supabase.rpc('update_my_profile', {
+      p_full_name: data.full_name ?? null,
+      p_phone: data.phone ?? null,
+      p_blood_type: data.blood_type ?? null,
+      p_birthdate: data.birthdate ?? null,
+      p_weight_kg: data.weight_kg ?? null,
+      p_sex: data.sex ?? null,
+      p_eligibility_status: data.eligibility_status ?? null,
+      p_avatar_url: data.avatar_url ?? null,
+      p_profile_complete: data.profile_complete ?? null,
+      p_theme_preference: data.theme_preference ?? null,
+    });
 
     if (!error) await fetchProfile(session.user.id);
     return { error: error?.message ?? null };

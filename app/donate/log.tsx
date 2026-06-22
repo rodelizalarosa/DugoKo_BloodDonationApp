@@ -1,4 +1,4 @@
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { CalendarDays, UploadCloud, X, FileImage, ShieldCheck } from 'lucide-react-native';
 import React, { useMemo, useState } from 'react';
 import {
@@ -22,6 +22,7 @@ import { ScreenHeader } from '@/components/ui/ScreenHeader';
 import { radius, spacing, typography } from '@/constants/theme';
 import { useTheme } from '@/context/ThemeContext';
 import { useToast } from '@/context/ToastContext';
+import { useDonations } from '@/lib/hooks/useDonations';
 
 function Field({
   label,
@@ -60,10 +61,17 @@ export default function LogDonationScreen() {
   const router = useRouter();
   const { theme, isDarkMode } = useTheme();
   const { showToast } = useToast();
+  const { eventId, date: eventDate, venue: eventVenue, branch: eventBranch } = useLocalSearchParams<{
+    eventId?: string;
+    date?: string;
+    venue?: string;
+    branch?: string;
+  }>();
+  const isEventDonation = !!eventId;
   
   // Basic Fields
-  const [date, setDate] = useState<Date | null>(null);
-  const [venue, setVenue] = useState('');
+  const [date, setDate] = useState<Date | null>(eventDate ? new Date(`${eventDate}T00:00:00`) : null);
+  const [venue, setVenue] = useState(eventVenue ?? '');
 
   // Date picker (custom month/day/year modal to match Edit Profile)
   const months = useMemo(
@@ -113,7 +121,7 @@ export default function LogDonationScreen() {
     setShowDonationDatePicker(false);
   };
 
-  const [branch, setBranch] = useState('');
+  const [branch, setBranch] = useState(eventBranch ?? '');
   
   // Vitals
   const [bp, setBp] = useState('');
@@ -152,8 +160,34 @@ export default function LogDonationScreen() {
     setUploadProgress(0);
   };
 
-  function handleSave() {
+  const { logDonation, refresh } = useDonations();
+
+  async function handleSave() {
+    if (!date) return;
+    
     const isVerified = !!(donorId.trim() && bagRef.trim() && uploadedFile);
+
+    const { error: saveError, donationId } = await logDonation({
+      date: formatIsoDate(date),
+      venue: venue.trim(),
+      branch: branch.trim(),
+      blood_bag_ref: bagRef.trim() || null,
+      donor_id: donorId.trim() || null,
+      is_verified: isVerified,
+      verified_at: isVerified ? new Date().toISOString() : null,
+      blood_pressure: bp.trim() || null,
+      hemoglobin: hemoglobin.trim() || null,
+      pulse: pulse.trim() || null,
+      notes: notes.trim() || null,
+      event_id: eventId ?? null,
+    });
+
+    if (saveError) {
+      showToast({ type: 'error', title: 'Save failed', message: saveError });
+      return;
+    }
+
+    await refresh();
 
     showToast({
       type: 'success',
@@ -163,21 +197,9 @@ export default function LogDonationScreen() {
         : 'Self-log saved. Pending PRC verification.',
     });
 
-    // Pass log variables to receipt screen as search parameters
     router.replace({
       pathname: '/donate/receipt',
-      params: {
-        date: date ? formatIsoDate(date) : '',
-        venue,
-        branch,
-        bloodBagRef: bagRef,
-        bp,
-        hemoglobin,
-        pulse,
-        notes,
-        isVerified: isVerified ? 'true' : 'false',
-        donorId: donorId.trim(),
-      },
+      params: donationId ? { id: donationId } : {},
     });
   }
 
@@ -307,9 +329,9 @@ export default function LogDonationScreen() {
             style={{ marginTop: spacing.lg }}
           />
           
-          <Text style={[styles.footnote, { color: theme.inkFaint }]}>
-            Saving will update your total donations. Verified cards will generate certified digital records immediately. Unverified cards may remain pending review.
-          </Text>
+<Text style={[styles.footnote, { color: theme.inkFaint }]}>
+             Saving will update your total donations. Verified cards will generate certified digital records immediately. Unverified cards are subject for review.
+           </Text>
         </ScrollView>
       </KeyboardAvoidingView>
 

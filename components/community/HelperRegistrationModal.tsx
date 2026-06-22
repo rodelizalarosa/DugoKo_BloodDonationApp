@@ -1,8 +1,8 @@
 import React, { useMemo, useState } from 'react';
-import { Modal, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { useTheme } from '@/context/ThemeContext';
+import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Button } from '@/components/ui/Button';
 import { radius, spacing, typography } from '@/constants/theme';
+import { useTheme } from '@/context/ThemeContext';
 import { validateHelperRegistration } from '@/lib/communityPosting';
 
 export function HelperRegistrationModal({
@@ -10,18 +10,24 @@ export function HelperRegistrationModal({
   onClose,
   onSubmitted,
   requesterLabel,
+  initialFullName,
+  initialContactNumber,
+  initialEmail,
 }: {
   visible: boolean;
   onClose: () => void;
-  onSubmitted: (payload: { fullName: string; contactNumber: string }) => void;
+  onSubmitted: (payload: { fullName: string; contactNumber: string; email: string }) => void;
   requesterLabel?: string;
+  initialFullName?: string;
+  initialContactNumber?: string;
+  initialEmail?: string;
 }) {
   const { theme } = useTheme();
 
-  const [fullName, setFullName] = useState('');
-  const [contactNumber, setContactNumber] = useState('');
+  const [fullName, setFullName] = useState(initialFullName ?? '');
+  const [contactNumber, setContactNumber] = useState(initialContactNumber ?? '');
+  const [email, setEmail] = useState(initialEmail ?? '');
   const [redCrossConsent, setRedCrossConsent] = useState(false);
-
   const [touched, setTouched] = useState(false);
 
   const validation = useMemo(
@@ -29,16 +35,18 @@ export function HelperRegistrationModal({
       validateHelperRegistration({
         fullName,
         contactNumber,
+        email,
         redCrossConsent,
       }),
-    [fullName, contactNumber, redCrossConsent]
+    [fullName, contactNumber, email, redCrossConsent]
   );
 
   const submitEnabled = validation.ok;
 
   const reset = () => {
-    setFullName('');
-    setContactNumber('');
+    setFullName(initialFullName ?? '');
+    setContactNumber(initialContactNumber ?? '');
+    setEmail(initialEmail ?? '');
     setRedCrossConsent(false);
     setTouched(false);
   };
@@ -55,6 +63,7 @@ export function HelperRegistrationModal({
     onSubmitted({
       fullName: fullName.trim(),
       contactNumber: contactNumber.trim(),
+      email: email.trim().toLowerCase(),
     });
 
     reset();
@@ -66,10 +75,10 @@ export function HelperRegistrationModal({
       <View style={styles.overlay}>
         <ScrollView contentContainerStyle={styles.modalInner} keyboardShouldPersistTaps="handled">
           <View style={[styles.modal, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-            <Text style={[styles.title, { color: theme.ink }]}>I can help</Text>
+            <Text style={[styles.title, { color: theme.ink }]}>I Can Help</Text>
             {!!requesterLabel && (
               <Text style={[styles.subtitle, { color: theme.inkMuted }]}>
-                You’re responding to: {requesterLabel}
+                You are responding to: {requesterLabel}
               </Text>
             )}
 
@@ -79,7 +88,7 @@ export function HelperRegistrationModal({
                 <View style={[styles.inputWrapper, { borderColor: theme.border, backgroundColor: theme.paper }]}>
                   <TextInput
                     value={fullName}
-                    onChangeText={(t) => setFullName(t)}
+                    onChangeText={setFullName}
                     placeholder="Juan Dela Cruz"
                     placeholderTextColor={theme.inkFaint}
                     style={[styles.input, { color: theme.ink }]}
@@ -96,8 +105,8 @@ export function HelperRegistrationModal({
                 <View style={[styles.inputWrapper, { borderColor: theme.border, backgroundColor: theme.paper }]}>
                   <TextInput
                     value={contactNumber}
-                    onChangeText={(t) => setContactNumber(t)}
-                    placeholder="09XX-XXX-XXXX"
+                    onChangeText={setContactNumber}
+                    placeholder="09XXXXXXXXX or +639XXXXXXXXX"
                     placeholderTextColor={theme.inkFaint}
                     style={[styles.input, { color: theme.ink }]}
                     keyboardType="phone-pad"
@@ -108,7 +117,26 @@ export function HelperRegistrationModal({
                 ) : null}
               </View>
 
-              <View style={styles.consentRow}>
+              <View style={styles.field}>
+                <Text style={[styles.label, { color: theme.inkMuted }]}>Email</Text>
+                <View style={[styles.inputWrapper, { borderColor: theme.border, backgroundColor: theme.paper }]}>
+                  <TextInput
+                    value={email}
+                    onChangeText={setEmail}
+                    placeholder="name@email.com"
+                    placeholderTextColor={theme.inkFaint}
+                    style={[styles.input, { color: theme.ink }]}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+                </View>
+                {touched && validation.errors.email ? (
+                  <Text style={[styles.error, { color: theme.crimson }]}>{validation.errors.email}</Text>
+                ) : null}
+              </View>
+
+              <Pressable style={styles.consentRow} onPress={() => setRedCrossConsent((v) => !v)}>
                 <View
                   style={[
                     styles.consentBox,
@@ -118,23 +146,20 @@ export function HelperRegistrationModal({
                     },
                   ]}
                 >
-                  <Text
-                    style={{ color: redCrossConsent ? theme.teal : 'transparent', fontWeight: '900' }}
-                    onPress={() => setRedCrossConsent((v) => !v)}
-                  >
+                  <Text style={{ color: redCrossConsent ? theme.teal : 'transparent', fontWeight: '900' }}>
                     {redCrossConsent ? '✓' : ''}
                   </Text>
                 </View>
 
                 <View style={{ flex: 1 }}>
                   <Text style={[styles.consentText, { color: theme.inkMuted }]}>
-                    I confirm I will follow Red Cross screening / health check instructions on-site.
+                    I confirm that I will follow Red Cross screening and health check instructions on-site.
                   </Text>
                   {touched && validation.errors.redCrossConsent ? (
                     <Text style={[styles.error, { color: theme.crimson }]}>{validation.errors.redCrossConsent}</Text>
                   ) : null}
                 </View>
-              </View>
+              </Pressable>
 
               <View style={styles.disclaimerBox}>
                 <View style={styles.disclaimerTitleRow}>
@@ -142,7 +167,8 @@ export function HelperRegistrationModal({
                   <Text style={{ color: theme.crimson, fontWeight: '900' }}>!</Text>
                 </View>
                 <Text style={[styles.disclaimerText, { color: theme.inkMuted }]}>
-                  Be vigilant at all times when sharing information. After submitting, the requester will see your full name and contact number, and will contact you for any additional details.
+                  A confirmation email will be sent to your email address. On the requester side, only
+                  your full name and contact number will be shown.
                 </Text>
               </View>
 

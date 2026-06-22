@@ -82,17 +82,11 @@ export const typography = {
 
 export const shadows = {
   light: {
-    shadowColor: '#3A1414',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
+    boxShadow: '0 4px 12px rgba(58, 20, 20, 0.08)',
     elevation: 3,
   },
   dark: {
-    shadowColor: '#FFFFFF',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.12,
-    shadowRadius: 8,
+    boxShadow: '0 2px 8px rgba(255, 255, 255, 0.12)',
     elevation: 2,
   },
 };

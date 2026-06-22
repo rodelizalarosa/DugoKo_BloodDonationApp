@@ -8,13 +8,17 @@ export interface User {
   middleName?: string;
   lastName: string;
   email: string;
+  phone?: string;
   bloodType: BloodType | null;
   birthdate: string | null;
   weightKg: number | null;
+  sex?: string;
+  eligibilityStatus: EligibilityStatus;
   donorLevel: DonorLevel;
   totalDonations: number;
   lastDonationDate: string | null;
   profileComplete: boolean;
+  themePreference: 'light' | 'dark';
   avatarUrl?: string;
 }
 
@@ -80,10 +84,13 @@ export interface DonationCenter {
 export interface Donation {
   id: string;
   userId: string;
+  eventId?: string | null;
   date: string;
   venue: string;
   branch: string;
   bloodBagRef?: string;
+  donorId?: string;
+  isVerified?: boolean;
   bloodPressure?: string;
   hemoglobin?: string;
   pulse?: string;
@@ -103,6 +110,10 @@ export interface FaqItem {
   answer: string;
   keywords: string[];
   category: string;
+  sourceTitle?: string;
+  sourceUrl?: string;
+  lastVerifiedAt?: string;
+  isActive?: boolean;
 }
 
 export interface LearnArticle {
@@ -124,6 +135,13 @@ export interface CommunityPost {
   body: string;
   postedAt: string;
   relatedRequestId?: string;
+}
+
+export interface HelperInfo {
+  fullName: string;
+  contactNumber: string;
+  email: string;
+  redCrossConsent: boolean;
 }
 
 export interface AppNotification {

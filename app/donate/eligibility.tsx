@@ -1,4 +1,4 @@
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { CheckCircle2, XCircle } from 'lucide-react-native';
 import React, { useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -8,6 +8,8 @@ import { Card } from '@/components/ui/Card';
 import { ScreenHeader } from '@/components/ui/ScreenHeader';
 import { spacing, typography } from '@/constants/theme';
 import { useTheme } from '@/context/ThemeContext';
+import { useToast } from '@/context/ToastContext';
+import { useAuth } from '@/context/AuthContext';
 
 interface Question {
   id: string;
@@ -27,13 +29,18 @@ type Step = 'intro' | number | 'result';
 
 export default function EligibilityCheckerScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ helpRequestId?: string }>();
   const { theme } = useTheme();
+  const { showToast } = useToast();
+  const { session, updateProfile } = useAuth();
+  const userId = session?.user?.id;
   const [step, setStep] = useState<Step>('intro');
   const [flags, setFlags] = useState<Record<string, boolean>>({});
+  const [saving, setSaving] = useState(false);
 
   const anyFlag = Object.values(flags).some(Boolean);
 
-  function answer(value: boolean) {
+  async function answer(value: boolean) {
     const q = questions[step as number];
     const next = { ...flags, [q.id]: value };
     setFlags(next);
@@ -41,6 +48,19 @@ export default function EligibilityCheckerScreen() {
       setStep((step as number) + 1);
     } else {
       setStep('result');
+
+      // Save eligibility result to DB
+      if (userId) {
+        setSaving(true);
+        const anyFlagNow = Object.values({ ...next, [q.id]: value }).some(Boolean);
+        const status = anyFlagNow ? 'deferred' : 'eligible';
+        const { error } = await updateProfile({ eligibility_status: status });
+        setSaving(false);
+
+        if (error) {
+          showToast({ type: 'error', title: 'Save failed', message: error });
+        }
+      }
     }
   }
 
@@ -99,9 +119,18 @@ export default function EligibilityCheckerScreen() {
                 </Text>
                 <View style={styles.answerRow}>
                   <Button
-                    label="Find Center"
+                    label={params.helpRequestId ? 'Continue to Help Form' : 'Find Center'}
                     variant="outline"
-                    onPress={() => router.push('/donate/centers')}
+                    onPress={() => {
+                      if (params.helpRequestId) {
+                        router.replace({
+                          pathname: '/(tabs)',
+                          params: { helpRequestId: params.helpRequestId },
+                        });
+                        return;
+                      }
+                      router.push('/donate/centers');
+                    }}
                     style={{ flex: 1 }}
                   />
                   <Button

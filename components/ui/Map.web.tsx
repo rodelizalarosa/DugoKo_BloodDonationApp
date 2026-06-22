@@ -1,18 +1,16 @@
 /**
  * Map.web.tsx — Web-specific implementation of the Map component.
  *
- * @rnmapbox/maps is a native-only library that requires the Mapbox iOS/Android
- * SDKs. It cannot be bundled for web because it attempts to import
- * `mapbox-gl/dist/mapbox-gl.css`, which is not installed.
+ * The native Map.tsx uses @rnmapbox/maps (Mapbox). On web, Mapbox cannot
+ * render natively, so this stub renders an OpenStreetMap iframe instead
+ * — no API key required. No external navigation buttons.
  *
- * Metro / Expo automatically picks this file over Map.tsx when bundling for web
- * (platform-specific file resolution).
- *
- * This stub renders an OpenStreetMap iframe — no API key required.
+ * Metro / Expo automatically picks this file over Map.tsx when bundling
+ * for web (platform-specific file resolution).
  */
 
 import React from 'react';
-import { View, Text, StyleSheet, Linking, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { MapPin } from 'lucide-react-native';
 import { useTheme } from '@/context/ThemeContext';
 import { spacing, typography, radius } from '@/constants/theme';
@@ -49,12 +47,6 @@ export default function Map({
     !Number.isNaN(centerLatitude) &&
     !Number.isNaN(centerLongitude);
 
-  const openInMaps = () => {
-    if (!hasCoords) return;
-    const url = `https://www.openstreetmap.org/?mlat=${centerLatitude}&mlon=${centerLongitude}#map=${zoom}/${centerLatitude}/${centerLongitude}`;
-    Linking.openURL(url);
-  };
-
   if (!hasCoords) {
     return (
       <View style={[styles.container, { backgroundColor: theme.surface }, style]}>
@@ -82,18 +74,10 @@ export default function Map({
           border: 'none',
           borderRadius: radius.sm,
         }}
-        title="Event location map"
+        title="Location map"
         loading="lazy"
         referrerPolicy="no-referrer"
       />
-      <TouchableOpacity
-        onPress={openInMaps}
-        style={[styles.badge, { backgroundColor: theme.surface }]}
-        activeOpacity={0.8}
-      >
-        <MapPin size={10} color={theme.crimson} />
-        <Text style={[styles.badgeText, { color: theme.inkMuted }]}>Open in Maps</Text>
-      </TouchableOpacity>
     </View>
   );
 }
@@ -121,10 +105,7 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 20,
     opacity: 0.92,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.15,
-    shadowRadius: 2,
+    boxShadow: '0 1px 2px rgba(0, 0, 0, 0.15)',
   },
   badgeText: {
     ...typography.caption,

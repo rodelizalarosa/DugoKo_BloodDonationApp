@@ -18,7 +18,13 @@ export function useLearn() {
       .order('published_at', { ascending: false });
 
     if (fetchError) {
-      setError(fetchError.message);
+      // Treat permission-related failures as "no articles yet" so the app
+      // can keep rendering instead of surfacing a blocking error overlay.
+      if (fetchError.code === '42501' || fetchError.code === 'PGRST301' || fetchError.message.toLowerCase().includes('forbidden')) {
+        setArticles([]);
+      } else {
+        setError(fetchError.message);
+      }
     } else {
       setArticles((data ?? []).map(mapLearnArticle));
     }
@@ -35,7 +41,8 @@ export function useLearn() {
       .select('*')
       .eq('id', id)
       .single();
-    if (error || !data) return null;
+    if (error) return null;
+    if (!data) return null;
     return mapLearnArticle(data);
   }, []);
 
@@ -48,13 +55,18 @@ export function useLearn() {
       .select('*')
       .or(`question.ilike.%${query}%,answer.ilike.%${query}%`);
 
-    if (error || !data) return [];
+    if (error) return [];
+    if (!data) return [];
     return data.map((row) => ({
       id: row.id,
       question: row.question,
       answer: row.answer,
       keywords: row.keywords,
       category: row.category,
+      sourceTitle: row.source_title ?? undefined,
+      sourceUrl: row.source_url ?? undefined,
+      lastVerifiedAt: row.last_verified_at ?? undefined,
+      isActive: row.is_active,
     }));
   }, []);
 

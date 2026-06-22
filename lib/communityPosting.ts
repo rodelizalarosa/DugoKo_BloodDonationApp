@@ -41,6 +41,11 @@ function normalizeDateInput(input: string): { date: Date | null; isRelative: boo
   return { date: null, isRelative: false };
 }
 
+export function parseNeededByInput(input: string): string | null {
+  const parsed = normalizeDateInput(input);
+  return parsed.date ? parsed.date.toISOString() : null;
+}
+
 export function deriveTriageFromNeededWhen(neededWhenInput: string): TriageResult {
   const parsed = normalizeDateInput(neededWhenInput);
   const now = new Date();
@@ -135,6 +140,9 @@ export function validateBloodRequestDraft(draft: BloodRequestDraft): BloodReques
 
   const neededWhen = draft.neededWhenInput.trim();
   if (!neededWhen) errors.neededWhenInput = 'When blood is needed is required (e.g., today).';
+  if (neededWhen && !normalizeDateInput(neededWhen).date) {
+    errors.neededWhenInput = 'Use today, tomorrow, or a valid date/time.';
+  }
 
   const triage = deriveTriageFromNeededWhen(neededWhen);
   const ok = Object.keys(errors).length === 0;
@@ -145,15 +153,24 @@ export function validateBloodRequestDraft(draft: BloodRequestDraft): BloodReques
 export function validateHelperRegistration(input: {
   fullName: string;
   contactNumber: string;
+  email: string;
   redCrossConsent: boolean;
 }): { ok: boolean; errors: { [k: string]: string } } {
   const errors: { [k: string]: string } = {};
 
   const fullName = input.fullName.trim();
   const contactNumber = input.contactNumber.trim();
+  const email = input.email.trim();
 
   if (!fullName) errors.fullName = 'Full name is required.';
   if (!contactNumber) errors.contactNumber = 'Contact number is required.';
+  if (contactNumber && !/^(\+63|63|0)9\d{9}$/.test(contactNumber.replace(/[\s-]/g, ''))) {
+    errors.contactNumber = 'Enter a valid PH mobile number, like 09XXXXXXXXX or +639XXXXXXXXX.';
+  }
+  if (!email) errors.email = 'Email is required.';
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    errors.email = 'Enter a valid email address.';
+  }
   if (!input.redCrossConsent) errors.redCrossConsent = 'Health check consent is required.';
 
   return { ok: Object.keys(errors).length === 0, errors };

@@ -10,7 +10,7 @@ import { useTheme } from '@/context/ThemeContext';
 import { CommunityPost } from '@/types';
 import { calculateEligibility } from '@/lib/eligibility';
 import { BloodRequestCreateModal } from '@/components/community/BloodRequestCreateModal';
-import { HelperRegistrationModal } from '@/components/community/HelperRegistrationModal';
+import { DonorStoryCreateModal } from '@/components/community/DonorStoryCreateModal';
 import { useProfile } from '@/lib/hooks/useProfile';
 import { useCommunity } from '@/lib/hooks/useCommunity';
 import { useToast } from '@/context/ToastContext';
@@ -27,11 +27,11 @@ export default function CommunityScreen() {
   const [timeFilter, setTimeFilter] = React.useState<'all' | 'today' | 'week' | 'month'>('all');
 
   const { profile } = useProfile();
-  const { posts, createBloodRequest } = useCommunity();
+  const { posts, createBloodRequest, createStoryOrAnnouncement } = useCommunity();
   const { showToast } = useToast();
 
   // Posting eligibility — safe-guard when profile is still loading
-  const eligibility = calculateEligibility(profile?.lastDonationDate ?? null);
+  const eligibility = calculateEligibility(profile?.lastDonationDate ?? null, profile?.sex);
 
   const mappedStatus: 'eligible' | 'deferred' | 'not_eligible' =
     eligibility.status === 'eligible' ? 'eligible' : eligibility.status === 'deferred' ? 'deferred' : 'not_eligible';
@@ -44,10 +44,6 @@ export default function CommunityScreen() {
 
   const [showBloodRequestModal, setShowBloodRequestModal] = React.useState(false);
   const [showDonorStoryModal, setShowDonorStoryModal] = React.useState(false);
-
-  // Helper registration modal can be triggered from detail screen; we keep state here for completeness.
-  const [showHelperModal, setShowHelperModal] = React.useState(false);
-  const [helperRequesterLabel, setHelperRequesterLabel] = React.useState<string | undefined>(undefined);
 
   const filterLabels = {
     all: 'All Time',
@@ -151,7 +147,8 @@ export default function CommunityScreen() {
               payload.bloodTypeNeeded,
               payload.unitsNeeded,
               payload.triageUrgencyLevel,
-              payload.body
+              payload.body,
+              payload.neededBy
             );
             if (error) {
               showToast({ type: 'error', title: 'Post failed', message: error });
@@ -166,26 +163,24 @@ export default function CommunityScreen() {
           }}
         />
 
-        {/* Donor story: MVP gating only; actual story posting modal is not implemented yet */}
-        <Modal visible={showDonorStoryModal} transparent animationType="fade" onRequestClose={() => setShowDonorStoryModal(false)}>
-          <Pressable
-            style={styles.modalOverlay}
-            onPress={() => setShowDonorStoryModal(false)}
-          >
-            <View style={[styles.modalSheet, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-              <Text style={[styles.modalTitle, { color: theme.ink }]}>Donor story posting</Text>
-              <Text style={[styles.modalText, { color: theme.inkMuted }]}>
-                Posting a donor story is available only for eligible users. The story submission UI is not implemented in this MVP.
-              </Text>
-              <Pressable
-                style={[styles.modalBtn, { backgroundColor: theme.crimson }]}
-                onPress={() => setShowDonorStoryModal(false)}
-              >
-                <Text style={{ color: theme.surface, fontWeight: '800' }}>Got it</Text>
-              </Pressable>
-            </View>
-          </Pressable>
-        </Modal>
+        <DonorStoryCreateModal
+          visible={showDonorStoryModal}
+          onClose={() => setShowDonorStoryModal(false)}
+          requesterEligibility={requesterEligibility}
+          onSubmitted={async (payload) => {
+            const { error } = await createStoryOrAnnouncement(payload.title, payload.body, 'story');
+            if (error) {
+              showToast({ type: 'error', title: 'Post failed', message: error });
+            } else {
+              showToast({
+                type: 'success',
+                title: 'Story posted!',
+                message: 'Your story is now visible to the community.',
+              });
+            }
+            setShowDonorStoryModal(false);
+          }}
+        />
 
         {/* Helper registration is handled on the post detail screen (I Can Help button). */}
 
@@ -330,10 +325,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     borderWidth: 1,
     overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
+    boxShadow: '0 4px 10px rgba(0, 0, 0, 0.1)',
     elevation: 5,
   },
   dropdownItem: {

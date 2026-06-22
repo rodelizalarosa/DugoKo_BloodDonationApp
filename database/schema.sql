@@ -52,6 +52,7 @@ CREATE TABLE users (
   birthdate          DATE,
   weight_kg          NUMERIC(5,2),
   sex                TEXT,       -- 'male' | 'female' — used for deferral interval (12wk/16wk)
+  eligibility_status eligibility_status NOT NULL DEFAULT 'unknown',
   donor_level        donor_level NOT NULL DEFAULT 'New Donor',
   role               user_role   NOT NULL DEFAULT 'donor',
   total_donations    INTEGER     NOT NULL DEFAULT 0,
@@ -102,9 +103,13 @@ CREATE TABLE event_rsvp (
   id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   event_id   UUID NOT NULL REFERENCES events(id) ON DELETE CASCADE,
   user_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  status     rsvp_status NOT NULL DEFAULT 'going',
-  time_slot  TEXT,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  status             rsvp_status NOT NULL DEFAULT 'going',
+  time_slot          TEXT,
+  contact_number     TEXT,
+  decl_healthy       BOOLEAN NOT NULL DEFAULT FALSE,
+  decl_no_meds_14d   BOOLEAN NOT NULL DEFAULT FALSE,
+  decl_consent       BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
   UNIQUE (event_id, user_id)
 );
 
@@ -120,6 +125,7 @@ CREATE TABLE blood_requests (
   units_needed      INTEGER NOT NULL,
   units_pledged     INTEGER NOT NULL DEFAULT 0,
   urgency_level     urgency_level NOT NULL,
+  needed_by         TIMESTAMPTZ,   -- "When blood is needed" — used for AI triage derivation
   status            request_status NOT NULL DEFAULT 'open',
   notes             TEXT,
   posted_by         UUID REFERENCES users(id),
@@ -127,10 +133,13 @@ CREATE TABLE blood_requests (
 );
 
 CREATE TABLE request_responses (
-  id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  request_id UUID NOT NULL REFERENCES blood_requests(id) ON DELETE CASCADE,
-  user_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  request_id     UUID NOT NULL REFERENCES blood_requests(id) ON DELETE CASCADE,
+  user_id        UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  helper_name    TEXT,
+  helper_contact TEXT,
+  helper_email   TEXT,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
   UNIQUE (request_id, user_id)
 );
 
@@ -145,6 +154,9 @@ CREATE TABLE donations (
   venue          TEXT NOT NULL,
   branch         TEXT NOT NULL,
   blood_bag_ref  TEXT,
+  donor_id       TEXT,            -- Red Cross Donor Card ID (e.g., PRC-12-34567)
+  is_verified    BOOLEAN NOT NULL DEFAULT FALSE,
+  verified_at    TIMESTAMPTZ,
   blood_pressure TEXT,
   hemoglobin     TEXT,
   pulse          TEXT,
@@ -172,7 +184,11 @@ CREATE TABLE faq (
   question TEXT    NOT NULL,
   answer   TEXT    NOT NULL,
   keywords TEXT[]  NOT NULL DEFAULT '{}',
-  category TEXT    NOT NULL
+  category TEXT    NOT NULL,
+  source_title TEXT,
+  source_url TEXT,
+  last_verified_at DATE,
+  is_active BOOLEAN NOT NULL DEFAULT TRUE
 );
 
 -- ─────────────────────────────────────────────

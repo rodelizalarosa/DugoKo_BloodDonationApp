@@ -1,12 +1,29 @@
-import React, { useMemo } from 'react';
-import { StyleSheet, View } from 'react-native';
-import Mapbox from '@rnmapbox/maps';
-import { useTheme } from '@/context/ThemeContext';
+/**
+ * Map.tsx - Native map component with a safe fallback.
+ *
+ * The preferred implementation uses @rnmapbox/maps, but that requires a
+ * custom development client or a production build with the native module
+ * installed. When the native module is unavailable, we fall back to
+ * react-native-maps so the screen still works instead of crashing.
+ */
 
-// Set public access token. Use EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN if defined.
-// Provide a default placeholder token.
-const MAPBOX_TOKEN = process.env.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN || 'pk.eyJ1IjoiZHVnb2tvLWFwcCIsImEiOiJjbHhxNXYyMWUwMDFwMmtzZXozdmhsbXFpIn0.placeholder-token';
-Mapbox.setAccessToken(MAPBOX_TOKEN);
+import React, { useMemo } from 'react';
+import { StyleSheet, View, Text } from 'react-native';
+import MapView, { Marker } from 'react-native-maps';
+import { useTheme } from '@/context/ThemeContext';
+import { radius, spacing, typography } from '@/constants/theme';
+
+let Mapbox: typeof import('@rnmapbox/maps') | null = null;
+try {
+  Mapbox = require('@rnmapbox/maps');
+} catch {
+  Mapbox = null;
+}
+
+const MAPBOX_TOKEN = process.env.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN || '';
+if (Mapbox && MAPBOX_TOKEN) {
+  Mapbox.setAccessToken(MAPBOX_TOKEN);
+}
 
 export interface MapMarker {
   id: string;
@@ -25,6 +42,65 @@ export interface MapProps {
   style?: any;
 }
 
+function hasValidCoords(latitude: number, longitude: number) {
+  return (
+    typeof latitude === 'number' &&
+    typeof longitude === 'number' &&
+    !Number.isNaN(latitude) &&
+    !Number.isNaN(longitude)
+  );
+}
+
+function MapFallback({
+  centerLatitude,
+  centerLongitude,
+  markers = [],
+  onMarkerPress,
+  style,
+}: MapProps) {
+  const { theme } = useTheme();
+
+  const region = useMemo(() => {
+    if (!hasValidCoords(centerLatitude, centerLongitude)) return null;
+
+    return {
+      latitude: centerLatitude,
+      longitude: centerLongitude,
+      latitudeDelta: 0.05,
+      longitudeDelta: 0.05,
+    };
+  }, [centerLatitude, centerLongitude]);
+
+  if (!region) {
+    return (
+      <View style={[styles.container, { backgroundColor: theme.surface }, style]}>
+        <Text style={[styles.label, { color: theme.inkMuted }]}>Map unavailable</Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={[styles.container, style]}>
+      <MapView
+        style={[styles.map, { borderColor: theme.border }]}
+        initialRegion={region}
+      >
+        {markers
+          .filter((marker) => hasValidCoords(marker.latitude, marker.longitude))
+          .map((marker) => (
+            <Marker
+              key={marker.id}
+              coordinate={{ latitude: marker.latitude, longitude: marker.longitude }}
+              title={marker.title}
+              description={marker.description}
+              onPress={() => onMarkerPress?.(marker.id)}
+            />
+          ))}
+      </MapView>
+    </View>
+  );
+}
+
 export default function Map({
   centerLatitude,
   centerLongitude,
@@ -34,13 +110,32 @@ export default function Map({
   style,
 }: MapProps) {
   const { theme, isDarkMode } = useTheme();
-
-  // Determine map style URL based on the application's theme context
-  const mapStyle = isDarkMode ? Mapbox.StyleURL.Dark : Mapbox.StyleURL.Light;
-
   const centerCoordinate = useMemo<[number, number]>(() => {
     return [centerLongitude, centerLatitude];
   }, [centerLatitude, centerLongitude]);
+
+  if (!Mapbox) {
+    return (
+      <MapFallback
+        centerLatitude={centerLatitude}
+        centerLongitude={centerLongitude}
+        zoom={zoom}
+        markers={markers}
+        onMarkerPress={onMarkerPress}
+        style={style}
+      />
+    );
+  }
+
+  if (!hasValidCoords(centerLatitude, centerLongitude)) {
+    return (
+      <View style={[styles.container, { backgroundColor: theme.surface }, style]}>
+        <Text style={[styles.label, { color: theme.inkMuted }]}>Map unavailable</Text>
+      </View>
+    );
+  }
+
+  const mapStyle = isDarkMode ? Mapbox.StyleURL.Dark : Mapbox.StyleURL.Light;
 
   return (
     <View style={[styles.container, style]}>
@@ -83,6 +178,12 @@ const styles = StyleSheet.create({
   },
   map: {
     flex: 1,
+    width: '100%',
+    height: '100%',
+  },
+  label: {
+    ...typography.caption,
+    marginTop: spacing.xs,
   },
   markerContainer: {
     width: 20,
@@ -92,10 +193,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
+    boxShadow: '0 2px 3.84px rgba(0, 0, 0, 0.25)',
     elevation: 5,
   },
   markerPin: {

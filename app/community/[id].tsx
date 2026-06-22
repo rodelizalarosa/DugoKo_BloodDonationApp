@@ -16,7 +16,7 @@ import { useToast } from '@/context/ToastContext';
 export default function CommunityPostDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { theme } = useTheme();
-  const { posts, requests, isLoading } = useCommunity();
+  const { posts, requests, isLoading, pledgeRequest } = useCommunity();
   const { showToast } = useToast();
   const post = posts.find((p) => p.id === id);
   const relatedRequest = post?.relatedRequestId
@@ -116,7 +116,21 @@ export default function CommunityPostDetailScreen() {
           visible={helperModalVisible}
           onClose={() => setHelperModalVisible(false)}
           requesterLabel={`${post?.title ?? 'this request'} • ${relatedRequest?.hospital ?? ''}`}
-          onSubmitted={(payload) => {
+          onSubmitted={async (payload) => {
+            if (!relatedRequest) return;
+
+            // Save the pledge to Supabase
+            const { error } = await pledgeRequest(relatedRequest.id, {
+              helper_name: payload.fullName,
+              helper_contact: payload.contactNumber,
+              helper_email: payload.email,
+            });
+
+            if (error) {
+              showToast({ type: 'error', title: 'Failed to submit', message: error });
+              return;
+            }
+
             setHelperSubmitted(true);
             setHelperFullName(payload.fullName);
             setHelperContactNumber(payload.contactNumber);

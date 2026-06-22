@@ -101,10 +101,7 @@ const styles = StyleSheet.create({
     maxHeight: '70%',
     borderRadius: radius.md,
     overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.2,
-    shadowRadius: 20,
+    boxShadow: '0 10px 20px rgba(0, 0, 0, 0.2)',
     elevation: 10,
   },
   header: {

@@ -14,7 +14,7 @@ interface UseDonationsReturn {
   donations:   Donation[];
   isLoading:   boolean;
   error:       string | null;
-  logDonation: (data: Omit<InsertDonation, 'user_id'>) => Promise<{ error: string | null }>;
+  logDonation: (data: Omit<InsertDonation, 'user_id'>) => Promise<{ error: string | null; donationId?: string }>;
   refresh:     () => Promise<void>;
 }
 
@@ -50,12 +50,14 @@ export function useDonations(): UseDonationsReturn {
   }, [fetchDonations]);
 
   const logDonation = useCallback(
-    async (data: Omit<InsertDonation, 'user_id'>): Promise<{ error: string | null }> => {
+    async (data: Omit<InsertDonation, 'user_id'>): Promise<{ error: string | null; donationId?: string }> => {
       if (!userId) return { error: 'Not authenticated' };
 
-      const { error: insertError } = await supabase
+      const { data: inserted, error: insertError } = await supabase
         .from('donations')
-        .insert({ ...data, user_id: userId });
+        .insert({ ...data, user_id: userId })
+        .select('id')
+        .single();
 
       if (insertError) {
         return { error: insertError.message };
@@ -63,7 +65,7 @@ export function useDonations(): UseDonationsReturn {
 
       // Refresh the list (the DB trigger also updates users + donor_insights)
       await fetchDonations();
-      return { error: null };
+      return { error: null, donationId: inserted?.id };
     },
     [userId, fetchDonations]
   );

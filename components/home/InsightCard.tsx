@@ -17,10 +17,8 @@ export function InsightCard({ insight }: { insight: DonorInsight }) {
         <Sparkles size={16} color="#FFD9DE" />
         <Text style={styles.eyebrow}>AI Donor Insight</Text>
       </View>
-      <Text style={styles.line}>You've donated {insight.totalDonations} times.</Text>
-      <Text style={styles.lineMuted}>
-        Potentially {insight.estimatedLivesImpacted} lives impacted. Keep it up!
-      </Text>
+      <Text style={styles.line}>Donations: {insight.totalDonations}</Text>
+      <Text style={styles.lineMuted}>Estimated impact: {insight.estimatedLivesImpacted} lives.</Text>
       <Pressable style={styles.btn} onPress={() => router.push('/insight')}>
         <Text style={styles.btnLabel}>View Details</Text>
         <ArrowRight size={16} color="#FFF" />

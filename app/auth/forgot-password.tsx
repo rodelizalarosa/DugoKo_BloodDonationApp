@@ -1,14 +1,13 @@
 /**
  * app/auth/forgot-password.tsx
- * ─────────────────────────────────────────────────────────────────
  * Forgot Password screen.
  *
  * Flow:
  *   1. User enters their email.
  *   2. We call sendPasswordResetOtp(email) which uses supabase.auth.signInWithOtp
- *      routed through the project's custom SMTP (no rate limit issues).
- *   3. On success → navigate to OTP screen with type='recovery'.
- *   4. After OTP verified → reset-password screen.
+ *      routed through the project's custom SMTP.
+ *   3. On success -> navigate to OTP screen with type='recovery'.
+ *   4. After OTP verified -> reset-password screen.
  *
  * DO NOT CHANGE THE UI LAYOUT OR STYLES.
  */
@@ -25,13 +24,13 @@ import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 
 export default function ForgotPasswordScreen() {
-  const router                      = useRouter();
-  const { theme }                   = useTheme();
-  const { sendPasswordResetOtp }    = useAuth();
-  const { showToast }               = useToast();
+  const router = useRouter();
+  const { theme } = useTheme();
+  const { sendPasswordResetOtp } = useAuth();
+  const { showToast } = useToast();
 
-  const [email,    setEmail]    = useState('');
-  const [loading,  setLoading]  = useState(false);
+  const [email, setEmail] = useState('');
+  const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const handleSend = async () => {
@@ -47,12 +46,9 @@ export default function ForgotPasswordScreen() {
     if (error) {
       setErrorMsg(error);
     } else {
-      showToast({ type: 'success', title: 'OTP Sent', message: 'A 6-digit code has been sent to your email.' });
-      // Navigate to OTP screen with recovery type
+      showToast({ type: 'success', title: 'OTP Sent', message: 'An 8-digit code has been sent to your email.' });
       router.push({
         pathname: '/auth/otp',
-        // type='email' matches the OTP sent by signInWithOtp.
-        // After verifyOtp('email'), Supabase creates a full session → updateUser(password) works.
         params: { email: email.trim().toLowerCase(), type: 'email' },
       });
     }
@@ -73,7 +69,8 @@ export default function ForgotPasswordScreen() {
 
         <Text style={[styles.title, { color: theme.ink }]}>Forgot Password?</Text>
         <Text style={[styles.subtitle, { color: theme.inkMuted }]}>
-          Enter your registered email and we'll send a 6-digit code to reset your password.
+          Enter your registered email and we will send an 8-digit OTP via email. Use it to reset
+          your password, and resend the code if needed.
         </Text>
 
         <View style={styles.form}>
@@ -100,7 +97,7 @@ export default function ForgotPasswordScreen() {
           </View>
 
           <Button
-            label={loading ? 'Sending…' : 'Send OTP Code'}
+            label={loading ? 'Sending...' : 'Send OTP Code'}
             onPress={handleSend}
             fullWidth
             disabled={loading}
@@ -112,16 +109,16 @@ export default function ForgotPasswordScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe:   { flex: 1 },
+  safe: { flex: 1 },
   header: { padding: spacing.lg },
   backBtn: { padding: spacing.xs },
   content: { flex: 1, padding: spacing.xl, alignItems: 'center', paddingTop: spacing.xxl },
   iconWrapper: { width: 100, height: 100, borderRadius: 50, alignItems: 'center', justifyContent: 'center', marginBottom: spacing.xl },
-  title:   { ...typography.display, fontSize: 28 },
+  title: { ...typography.display, fontSize: 28 },
   subtitle: { ...typography.body, textAlign: 'center', marginTop: spacing.sm, marginBottom: spacing.xxl },
-  form:    { width: '100%', gap: spacing.lg },
+  form: { width: '100%', gap: spacing.lg },
   errorBanner: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, padding: spacing.sm, borderRadius: radius.sm },
-  errorText:   { ...typography.caption, flex: 1, fontWeight: '600' },
+  errorText: { ...typography.caption, flex: 1, fontWeight: '600' },
   inputWrapper: { flexDirection: 'row', alignItems: 'center', height: 56, borderRadius: radius.md, borderWidth: 1, paddingHorizontal: spacing.md, width: '100%' },
   input: { flex: 1, ...typography.body, height: '100%' },
 });

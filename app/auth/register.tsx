@@ -27,20 +27,24 @@ const PASSWORD_RULES = [
   { id: 'special',   label: 'One special character (!@#$…)',    test: (p: string) => /[^A-Za-z0-9]/.test(p) },
 ];
 
-function getStrengthLabel(passed: number): { label: string; color: string } {
-  if (passed <= 1) return { label: 'Weak',      color: '#EF4444' };
-  if (passed === 2) return { label: 'Fair',      color: '#F97316' };
-  if (passed === 3) return { label: 'Good',      color: '#EAB308' };
-  if (passed === 4) return { label: 'Strong',    color: '#22C55E' };
-  return              { label: 'Very Strong', color: '#16A34A' };
+function getStrengthLabel(passed: number): string {
+  if (passed <= 1) return 'Weak';
+  if (passed === 2) return 'Fair';
+  if (passed === 3) return 'Good';
+  if (passed === 4) return 'Strong';
+  return 'Very Strong';
 }
+
+// ── Name validation ────────────────────────────────────────────────
+const NAME_REGEX   = /^[A-Za-zÀ-ÖØ-öø-ÿÑñ' -]+$/;
+const MI_REGEX     = /^[A-Za-zÀ-ÖØ-öø-ÿÑñ]?$/;
 
 // ── Email validation ───────────────────────────────────────────────
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default function RegisterScreen() {
   const router    = useRouter();
-  const { theme } = useTheme();
+  const { theme, isDarkMode } = useTheme();
   const { signUp } = useAuth();
   const { showToast } = useToast();
 
@@ -68,6 +72,8 @@ export default function RegisterScreen() {
   const passedCount  = ruleResults.filter((r) => r.passed).length;
   const strength     = getStrengthLabel(passedCount);
   const passwordValid = passedCount === PASSWORD_RULES.length;
+  const validationGreen = isDarkMode ? '#22C55E' : '#15803D';
+  const validationGreenStrong = isDarkMode ? '#16A34A' : '#166534';
 
   const fullName = [form.firstName.trim(), form.middleName.trim(), form.lastName.trim()]
     .filter(Boolean)
@@ -80,6 +86,18 @@ export default function RegisterScreen() {
     // ── Field validations ──────────────────────────────────────
     if (!form.firstName.trim() || !form.lastName.trim()) {
       setErrorMsg('First and last name are required.');
+      return;
+    }
+    if (!NAME_REGEX.test(form.firstName.trim())) {
+      setErrorMsg('First name may only contain letters.');
+      return;
+    }
+    if (!NAME_REGEX.test(form.lastName.trim())) {
+      setErrorMsg('Last name may only contain letters.');
+      return;
+    }
+    if (form.middleName.trim() && !MI_REGEX.test(form.middleName.trim())) {
+      setErrorMsg('Middle initial must be a single letter.');
       return;
     }
     if (!form.email.trim()) {
@@ -223,12 +241,12 @@ export default function RegisterScreen() {
                     placeholder="Juan"
                     placeholderTextColor={theme.inkFaint}
                     value={form.firstName}
-                    onChangeText={update('firstName')}
+                    onChangeText={(v) => update('firstName')(v.replace(/[^A-Za-zÀ-ÖØ-öø-ÿÑñ' -]/g, ''))}
                     autoCapitalize="words"
                   />
                 </View>
               </View>
-              <View style={[styles.inputGroup, { width: '28%' }]}>
+              <View style={[styles.inputGroup, { width: 90 }]}>
                 <Text style={[styles.label, { color: theme.inkMuted }]}>M.I.</Text>
                 <View style={[styles.inputWrapper, { backgroundColor: theme.surface, borderColor: theme.border }]}>
                   <TextInput
@@ -236,8 +254,10 @@ export default function RegisterScreen() {
                     placeholder="G"
                     placeholderTextColor={theme.inkFaint}
                     value={form.middleName}
-                    onChangeText={update('middleName')}
-                    maxLength={2}
+                    onChangeText={(v) => {
+                      const cleaned = v.replace(/[^A-Za-z]/g, '').slice(0, 1);
+                      update('middleName')(cleaned);
+                    }}
                     autoCapitalize="characters"
                   />
                 </View>
@@ -250,10 +270,10 @@ export default function RegisterScreen() {
                 <TextInput
                   style={[styles.input, { color: theme.ink }]}
                   placeholder="Dela Cruz"
-                  placeholderTextColor={theme.inkFaint}
-                  value={form.lastName}
-                  onChangeText={update('lastName')}
-                  autoCapitalize="words"
+                    placeholderTextColor={theme.inkFaint}
+                    value={form.lastName}
+                    onChangeText={(v) => update('lastName')(v.replace(/[^A-Za-zÀ-ÖØ-öø-ÿÑñ' -]/g, ''))}
+                    autoCapitalize="words"
                 />
               </View>
             </View>
@@ -278,7 +298,7 @@ export default function RegisterScreen() {
                   autoCorrect={false}
                 />
                 {form.email.length > 0 && EMAIL_REGEX.test(form.email) && (
-                  <CheckCircle2 size={18} color="#22C55E" />
+                  <CheckCircle2 size={18} color={validationGreen} />
                 )}
               </View>
               {form.email.length > 4 && !EMAIL_REGEX.test(form.email) && (
@@ -312,18 +332,28 @@ export default function RegisterScreen() {
               {/* Strength meter */}
               {passwordTouched && form.password.length > 0 && (
                 <View style={styles.strengthContainer}>
-                  <View style={styles.strengthBar}>
-                    {PASSWORD_RULES.map((_, i) => (
-                      <View
-                        key={i}
-                        style={[
-                          styles.strengthSegment,
-                          { backgroundColor: i < passedCount ? strength.color : theme.border },
-                        ]}
-                      />
-                    ))}
+                  <View style={styles.strengthTopRow}>
+                    <View style={styles.strengthBar}>
+                      {PASSWORD_RULES.map((_, i) => (
+                        <View
+                          key={i}
+                          style={[
+                            styles.strengthSegment,
+                            { backgroundColor: i < passedCount ? validationGreenStrong : theme.border },
+                          ]}
+                        />
+                      ))}
+                    </View>
+                    <Text
+                      numberOfLines={1}
+                      style={[
+                        styles.strengthLabel,
+                        { color: passedCount > 0 ? validationGreenStrong : theme.inkMuted },
+                      ]}
+                    >
+                      {strength}
+                    </Text>
                   </View>
-                  <Text style={[styles.strengthLabel, { color: strength.color }]}>{strength.label}</Text>
                 </View>
               )}
 
@@ -334,9 +364,9 @@ export default function RegisterScreen() {
                     <View key={r.id} style={styles.ruleRow}>
                       <CheckCircle2
                         size={13}
-                        color={r.passed ? '#22C55E' : theme.inkFaint}
+                        color={r.passed ? validationGreen : theme.inkFaint}
                       />
-                      <Text style={[styles.ruleText, { color: r.passed ? '#22C55E' : theme.inkFaint }]}>
+                      <Text style={[styles.ruleText, { color: r.passed ? validationGreen : theme.inkFaint }]}>
                         {r.label}
                       </Text>
                     </View>
@@ -352,7 +382,7 @@ export default function RegisterScreen() {
                 styles.inputWrapper,
                 { backgroundColor: theme.surface, borderColor: theme.border },
                 form.confirmPassword.length > 0 && form.password !== form.confirmPassword && { borderColor: theme.crimson },
-                form.confirmPassword.length > 0 && form.password === form.confirmPassword && { borderColor: '#22C55E' },
+                form.confirmPassword.length > 0 && form.password === form.confirmPassword && { borderColor: validationGreenStrong },
               ]}>
                 <Lock size={18} color={theme.inkFaint} style={styles.inputIcon} />
                 <TextInput
@@ -374,7 +404,7 @@ export default function RegisterScreen() {
                 <Text style={[styles.fieldHint, { color: theme.crimson }]}>Passwords do not match.</Text>
               )}
               {form.confirmPassword.length > 0 && form.password === form.confirmPassword && (
-                <Text style={[styles.fieldHint, { color: '#22C55E' }]}>✓ Passwords match</Text>
+                <Text style={[styles.fieldHint, { color: validationGreenStrong }]}>✓ Passwords match</Text>
               )}
             </View>
 
@@ -428,14 +458,21 @@ const styles = StyleSheet.create({
   label:       { ...typography.caption, fontWeight: '600', marginLeft: 4 },
   inputWrapper: { flexDirection: 'row', alignItems: 'center', height: 52, borderRadius: radius.md, borderWidth: 1, paddingHorizontal: spacing.md },
   inputIcon:   { marginRight: spacing.sm },
-  input:       { flex: 1, ...typography.body, height: '100%' },
+  input:       { flex: 1, ...typography.body, height: '100%', minWidth: 0 },
   fieldHint:   { ...typography.caption, marginLeft: 4, marginTop: 2 },
 
   // Password strength
-  strengthContainer: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.xs },
+  strengthContainer: { gap: spacing.xs, marginTop: spacing.xs },
+  strengthTopRow:    { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   strengthBar:       { flex: 1, flexDirection: 'row', gap: 4 },
   strengthSegment:   { flex: 1, height: 4, borderRadius: 2 },
-  strengthLabel:     { ...typography.caption, fontWeight: '700', minWidth: 64 },
+  strengthLabel:     {
+    ...typography.caption,
+    fontWeight: '700',
+    minWidth: 84,
+    flexShrink: 0,
+    textAlign: 'right',
+  },
   rulesList:         { gap: 4, marginTop: spacing.xs },
   ruleRow:           { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   ruleText:          { ...typography.caption, fontSize: 11 },

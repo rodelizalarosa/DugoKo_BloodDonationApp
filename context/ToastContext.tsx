@@ -201,11 +201,15 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
 
       {/* Overlay — rendered above all screens */}
       <View
-        style={[
-          styles.overlay,
-          { top: insets.top + spacing.sm },
-        ]}
-        pointerEvents="box-none"
+        style={{
+          position: 'absolute',
+          left: spacing.lg,
+          right: spacing.lg,
+          zIndex: 9999,
+          gap: spacing.sm,
+          pointerEvents: 'box-none',
+          top: insets.top + spacing.sm,
+        }}
       >
         {toasts.map((toast) => (
           <ToastItem
@@ -228,13 +232,7 @@ export function useToast(): ToastContextType {
 
 // ── Styles ─────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
-  overlay: {
-    position:  'absolute',
-    left:      spacing.lg,
-    right:     spacing.lg,
-    zIndex:    9999,
-    gap:       spacing.sm,
-  },
+
   toast: {
     flexDirection:  'row',
     alignItems:     'center',
@@ -244,10 +242,7 @@ const styles = StyleSheet.create({
     borderRadius:   radius.md,
     borderWidth:    1,
     // Shadow
-    shadowColor:    '#000',
-    shadowOffset:   { width: 0, height: 4 },
-    shadowOpacity:  0.3,
-    shadowRadius:   8,
+    boxShadow: '0 4px 8px rgba(0, 0, 0, 0.3)',
     elevation:      8,
   },
   toastBody: {

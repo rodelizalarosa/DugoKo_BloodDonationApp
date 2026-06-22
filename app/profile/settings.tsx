@@ -7,10 +7,18 @@ import { Card } from '@/components/ui/Card';
 import { ScreenHeader } from '@/components/ui/ScreenHeader';
 import { spacing, typography } from '@/constants/theme';
 import { useTheme } from '@/context/ThemeContext';
+import { useProfile } from '@/lib/hooks/useProfile';
 
 export default function SettingsScreen() {
   const router = useRouter();
-  const { theme, isDarkMode, toggleTheme } = useTheme();
+  const { theme, isDarkMode, setThemePreference } = useTheme();
+  const { updateProfile } = useProfile();
+
+  const handleThemeChange = async (enabled: boolean) => {
+    const preference = enabled ? 'dark' : 'light';
+    await setThemePreference(preference);
+    await updateProfile({ theme_preference: preference });
+  };
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.paper }]} edges={['top']}>
@@ -49,7 +57,7 @@ export default function SettingsScreen() {
             </View>
             <Switch
               value={isDarkMode}
-              onValueChange={toggleTheme}
+              onValueChange={handleThemeChange}
               trackColor={{ false: '#ccc', true: theme.crimson }}
               thumbColor="#FFF"
             />

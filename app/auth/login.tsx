@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import { Mail, Lock, ArrowRight, AlertCircle } from 'lucide-react-native';
+import { Mail, Lock, ArrowRight, AlertCircle, Eye, EyeOff } from 'lucide-react-native';
 import React, { useState } from 'react';
 import {
   StyleSheet,
@@ -29,18 +29,40 @@ export default function LoginScreen() {
   const [password,  setPassword]  = useState('');
   const [loading,   setLoading]   = useState(false);
   const [errorMsg,  setErrorMsg]  = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
+
+  const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
   const handleLogin = async () => {
     setErrorMsg(null);
-    if (!email.trim() || !password) {
-      setErrorMsg('Please enter your email and password.');
+    if (!email.trim()) {
+      setErrorMsg('Please enter your email address.');
+      return;
+    }
+    if (!password) {
+      setErrorMsg('Please enter your password.');
+      return;
+    }
+    if (!EMAIL_REGEX.test(email.trim())) {
+      setErrorMsg('Please enter a valid email address.');
       return;
     }
     setLoading(true);
     const { error } = await signIn(email.trim().toLowerCase(), password);
     setLoading(false);
     if (error) {
-      setErrorMsg(error);
+      if (error === 'EMAIL_NOT_REGISTERED') {
+        setErrorMsg('Account not found');
+      } else if (error === 'EMAIL_NOT_CONFIRMED') {
+        router.replace({
+          pathname: '/auth/otp',
+          params: { email: email.trim().toLowerCase(), type: 'signup' },
+        });
+      } else if (error === 'INVALID_LOGIN_CREDENTIALS') {
+        setErrorMsg('Incorrect password');
+      } else {
+        setErrorMsg(error);
+      }
     } else {
       showToast({ type: 'success', title: 'Welcome Back!', message: 'You have logged in successfully.' });
     }
@@ -97,8 +119,11 @@ export default function LoginScreen() {
                   placeholderTextColor={theme.inkFaint}
                   value={password}
                   onChangeText={setPassword}
-                  secureTextEntry
+                  secureTextEntry={!showPassword}
                 />
+                <TouchableOpacity onPress={() => setShowPassword((v) => !v)} hitSlop={8}>
+                  {showPassword ? <EyeOff size={18} color={theme.inkFaint} /> : <Eye size={18} color={theme.inkFaint} />}
+                </TouchableOpacity>
               </View>
               <TouchableOpacity
                 style={styles.forgotBtn}

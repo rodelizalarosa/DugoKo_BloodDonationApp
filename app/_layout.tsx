@@ -1,62 +1,77 @@
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { ThemeProvider, useTheme } from '@/context/ThemeContext';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { ToastProvider } from '@/context/ToastContext';
 
+function navigateSafe(router: ReturnType<typeof useRouter>, route: string) {
+  setTimeout(() => { try { router.replace(route as any); } catch {} }, 0);
+}
+
 /**
- * Guards the router based on auth state.
+ * Guards the router based on auth state AND user role (RBAC).
  * - If session is null (logged out) → redirect to /auth/login
  * - If session exists and on an auth screen → redirect to /(tabs)
+ * - If session exists but profile is INCOMPLETE → redirect to /profile/edit
+ * - Admin users are redirected to admin panel (can still access tabs)
  *
  * Exceptions (mid-flow screens that must not be redirected away):
- *   - auth/otp          — OTP verification step (may have a temporary recovery session)
- *   - auth/reset-password — password update step (requires recovery session to be present)
+ *   - auth/otp             — OTP verification step
+ *   - auth/reset-password   — password update step
+ *   - profile/complete      — profile completion screen
+ *   - admin                 — admin panel screens
  */
 function AuthGate({ children }: { children: React.ReactNode }) {
   const { session, profile, isLoading } = useAuth();
   const segments = useSegments();
   const router   = useRouter();
+  const mounted  = useRef(false);
+
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
 
   useEffect(() => {
-    if (isLoading) return; // Wait for session restore
+    if (isLoading) return;
 
-    // If session exists but profile is still loading (auth callback / async refresh), wait.
-    if (session && !profile) return;
-
-    const inAuthGroup = segments[0] === 'auth';
-    const currentScreen = segments[1] as string | undefined;
-
-    // These screens are intentionally mid-flow and must not be interrupted.
-    const isMidFlowScreen =
-      currentScreen === 'otp' || currentScreen === 'reset-password';
-
-    // Splash screen is at / (empty segment list) or index
     const segs = segments as unknown as string[];
-    const isSplashScreen =
-      segs.length === 0 ||
-      segs[0] === 'index' ||
-      segs[0] === '';
+    const currentRoot = segs[0] || '';
+    const currentScreen = segs[1] || '';
+    const inAuthGroup = currentRoot === 'auth';
+    const inAdminGroup = currentRoot === 'admin';
+
+    const isMidFlowScreen =
+      currentScreen === 'otp' ||
+      currentScreen === 'reset-password' ||
+      currentScreen === 'complete' ||
+      currentScreen === 'edit';
+
+    const isOnProfileCompletion = currentRoot === 'profile' && currentScreen === 'complete';
+    const isSplashScreen = segs.length === 0 || segs[0] === 'index' || segs[0] === '';
 
     if (!session) {
       if (!inAuthGroup && !isSplashScreen) {
-        // Not logged in and not on auth/splash screen -> redirect to login
-        router.replace('/auth/login');
+        navigateSafe(router, '/auth/login');
       }
     } else {
-      // User is logged in
+      if (inAdminGroup && profile?.role === 'donor') {
+        navigateSafe(router, '/(tabs)');
+        return;
+      }
+
       if (inAuthGroup || isSplashScreen) {
         if (!isMidFlowScreen) {
-          // Logged in user on auth/splash screen -> redirect to tabs
-          router.replace('/(tabs)');
+          if (profile && !profile.profile_complete && !isOnProfileCompletion) {
+            navigateSafe(router, '/profile/complete');
+          } else {
+            navigateSafe(router, '/(tabs)');
+          }
         }
       }
     }
   }, [session, profile, isLoading, segments]);
 
-  if (isLoading || (session && !profile)) {
+  if (isLoading) {
     // Show a centered spinner while session/profile is being restored or loaded
     return (
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
@@ -70,6 +85,7 @@ function AuthGate({ children }: { children: React.ReactNode }) {
 
 function RootContent() {
   const { isDarkMode, theme } = useTheme();
+
   return (
     <>
       <StatusBar style={isDarkMode ? 'light' : 'dark'} />
@@ -96,10 +112,14 @@ function RootContent() {
           <Stack.Screen name="donate/receipt" />
           <Stack.Screen name="community/[id]" />
           <Stack.Screen name="learn/[id]" />
+          <Stack.Screen name="profile/complete" />
           <Stack.Screen name="profile/edit" />
           <Stack.Screen name="profile/history" />
           <Stack.Screen name="profile/settings" />
           <Stack.Screen name="insight/index" />
+
+          {/* Admin screens — only accessible to admin/moderator roles */}
+          <Stack.Screen name="admin/index" />
         </Stack>
       </AuthGate>
     </>

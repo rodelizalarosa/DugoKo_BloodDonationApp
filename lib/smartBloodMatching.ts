@@ -73,8 +73,11 @@ export function getRecommendedDonors(params: {
         reasons.push('Blood type not set');
       }
 
-      const eligibility = calculateEligibility(donor.lastDonationDate);
-      const hasDonationHistory = donor.profileComplete && donor.totalDonations > 0;
+      const eligibility =
+        donor.eligibilityStatus === 'eligible'
+          ? { status: 'eligible' as const, nextEligibleDate: null, daysRemaining: 0 }
+          : calculateEligibility(donor.lastDonationDate, donor.sex);
+      const hasDonationHistory = donor.profileComplete && (donor.totalDonations > 0 || donor.eligibilityStatus === 'eligible');
 
       const isEligible = hasDonationHistory && eligibility.status === 'eligible';
       if (hasDonationHistory) {
