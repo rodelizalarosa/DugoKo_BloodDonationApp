@@ -3,18 +3,18 @@ import React from 'react';
 import { Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View, Pressable } from 'react-native';
 import { radius, spacing, typography } from '@/constants/theme';
 import { useTheme } from '@/context/ThemeContext';
-import { AppNotification } from '@/types';
 
 interface NotificationModalProps {
   visible: boolean;
   onClose: () => void;
-  notifications: AppNotification[];
+  notifications: any[];
+  onMarkAsRead?: (id: string) => void;
 }
 
-export function NotificationModal({ visible, onClose, notifications }: NotificationModalProps) {
+export function NotificationModal({ visible, onClose, notifications, onMarkAsRead }: NotificationModalProps) {
   const { theme, isDarkMode } = useTheme();
 
-  const getIcon = (type: AppNotification['type']) => {
+  const getIcon = (type: string) => {
     switch (type) {
       case 'critical':
         return <AlertCircle size={18} color={theme.crimson} />;
@@ -53,32 +53,36 @@ export function NotificationModal({ visible, onClose, notifications }: Notificat
                 <Text style={[styles.emptyText, { color: theme.inkFaint }]}>No notifications yet</Text>
               </View>
             ) : (
-              notifications.map((n) => (
-                <View 
-                  key={n.id} 
-                  style={[
-                    styles.item, 
-                    { borderBottomColor: theme.border },
-                    !n.read && { backgroundColor: isDarkMode ? 'rgba(179, 18, 42, 0.05)' : 'rgba(179, 18, 42, 0.03)' }
-                  ]}
-                >
-                  <View style={styles.itemHeader}>
-                    <View style={styles.typeIcon}>
-                      {getIcon(n.type)}
-                    </View>
-                    <View style={styles.itemContent}>
-                      <Text style={[styles.itemTitle, { color: theme.ink }]}>{n.title}</Text>
-                      <Text style={[styles.itemBody, { color: theme.inkMuted }]}>{n.body}</Text>
-                      <Text style={[styles.itemTime, { color: theme.inkFaint }]}>
-                        {new Date(n.timestamp).toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                      </Text>
+              notifications.map((n) => {
+                if (!n.read && onMarkAsRead) {
+                  onMarkAsRead(n.id);
+                }
+                return (
+                  <View 
+                    key={n.id} 
+                    style={[
+                      styles.item, 
+                      { borderBottomColor: theme.border },
+                      !n.read && { backgroundColor: isDarkMode ? 'rgba(179, 18, 42, 0.05)' : 'rgba(179, 18, 42, 0.03)' }
+                    ]}
+                  >
+                    <View style={styles.itemHeader}>
+                      <View style={styles.typeIcon}>
+                        {getIcon(n.type)}
+                      </View>
+                      <View style={styles.itemContent}>
+                        <Text style={[styles.itemTitle, { color: theme.ink }]}>{n.title}</Text>
+                        <Text style={[styles.itemBody, { color: theme.inkMuted }]}>{n.body}</Text>
+                        <Text style={[styles.itemTime, { color: theme.inkFaint }]}>
+                          {new Date(n.timestamp).toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                        </Text>
+                      </View>
                     </View>
                   </View>
-                </View>
-              ))
+                );
+              })
             )}
           </ScrollView>
-
         </Pressable>
       </Pressable>
     </Modal>

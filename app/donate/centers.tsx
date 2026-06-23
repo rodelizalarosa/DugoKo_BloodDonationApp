@@ -1,4 +1,4 @@
-import { Phone, MapPin } from 'lucide-react-native';
+import { Phone, MapPin, Navigation } from 'lucide-react-native';
 import React, { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View, ActivityIndicator, Linking } from 'react-native';
 import Map from '@/components/ui/Map';
@@ -93,13 +93,23 @@ export default function CentersScreen() {
           <Text style={[styles.meta, { color: theme.inkFaint }]}>{selectedCenter.contact} · {selectedCenter.hours}</Text>
           <View style={styles.activeActions}>
             <Button
-              label="Show on Map"
+              label="Get Directions"
               variant="outline"
-              onPress={() => setSelectedId(selectedCenter.id)}
+              size="small"
+              onPress={() => {
+                const lat = selectedCenter.latitude;
+                const lng = selectedCenter.longitude;
+                if (lat && lng) {
+                  const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${lng},${lat}?destination=${lng},${lat}&(access_token=pk.eyJ1IjoiZGVtby1hY2NvdW50IiwiYSI6ImNsRGVtb0FQMTMxZzIycnF2NzZ6Zmh4eXgifQ.R6JADKqMnUOPmS9la6qQMQ`;
+                  Linking.openURL(url);
+                }
+              }}
+              disabled={!selectedCenter.latitude || !selectedCenter.longitude}
               style={{ flex: 1 }}
             />
             <Button
-              label="Call Center"
+              label="Call"
+              size="small"
               onPress={() => selectedCenter.contact && Linking.openURL(`tel:${selectedCenter.contact.replace(/[^+\d]/g, '')}`)}
               disabled={!selectedCenter.contact}
               style={{ flex: 1 }}

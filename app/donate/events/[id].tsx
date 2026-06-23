@@ -1,7 +1,8 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { CalendarDays, Clock, MapPin, Users, CheckCircle2 } from 'lucide-react-native';
+import { CalendarDays, Clock, MapPin, Users, CheckCircle2, Navigation, Phone } from 'lucide-react-native';
 import React, { useEffect, useState } from 'react';
 import Map from '@/components/ui/Map';
+import { Linking } from 'react-native';
 import {
   ScrollView,
   StyleSheet,
@@ -95,7 +96,19 @@ export default function EventDetailsScreen() {
     if (!event) return;
     setIsSubmitting(true);
     // Persist RSVP to Supabase with health declarations
-    const { error } = await rsvpEvent(event.id, 'going', selectedTimeSlot, contact, declHealthy, declMeds, declConsent);
+    const { error } = await rsvpEvent(
+      event.id,
+      'going',
+      selectedTimeSlot,
+      contact,
+      declHealthy,
+      declMeds,
+      declConsent,
+      profile?.email,
+      profile ? `${profile.firstName} ${profile.lastName}` : undefined,
+      event.title,
+      event.venue
+    );
     setIsSubmitting(false);
     if (!error) {
       setIsSuccess(true);
@@ -130,36 +143,74 @@ export default function EventDetailsScreen() {
           <InfoRow icon={Users} label={`${localSlots} slots available`} />
         </Card>
 
-        {/* Map Preview (react-native-maps) */}
-        <Card style={[styles.mapCard, { backgroundColor: isDarkMode ? '#1E1212' : '#F6EFEA', borderColor: theme.border, overflow: 'hidden' }]}>
-          <Text style={[styles.mapLabel, { color: theme.inkFaint }]}>EVENT VENUE MAP</Text>
-
-          {typeof event.latitude === 'number' &&
-          typeof event.longitude === 'number' &&
-          !Number.isNaN(event.latitude) &&
-          !Number.isNaN(event.longitude) ? (
+        {/* Map Preview Card */}
+        {event.latitude && event.longitude ? (
+          <Card style={[styles.mapCard, { borderColor: theme.border, overflow: 'hidden' }]}>
             <Map
               style={styles.mapView}
               centerLatitude={event.latitude}
               centerLongitude={event.longitude}
-              zoom={13}
-              markers={[
-                {
-                  id: event.id,
-                  latitude: event.latitude,
-                  longitude: event.longitude,
-                  title: event.title,
-                  description: event.venue,
-                },
-              ]}
+              zoom={14}
+              markers={[{ id: event.id, latitude: event.latitude, longitude: event.longitude, title: event.venue, description: event.address }]}
             />
-          ) : (
-            <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-              <Text style={{ color: theme.inkMuted }}>Map unavailable</Text>
+            <View style={styles.actionButtons}>
+              <Button
+                label="Get Directions"
+                variant="outline"
+                size="small"
+                onPress={() => {
+                  const lat = event.latitude;
+                  const lng = event.longitude;
+                  if (lat && lng) {
+                    const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${lng},${lat}?destination=${lng},${lat}&(access_token=pk.eyJ1IjoiZGVtby1hY2NvdW50IiwiYSI6ImNsRGVtb0FQMTMxZzIycnF2NzZ6Zmh4eXgifQ.R6JADKqMnUOPmS9la6qQMQ`;
+                    Linking.openURL(url);
+                  }
+                }}
+                disabled={!event.latitude || !event.longitude}
+                style={{ flex: 1 }}
+              />
+              <Button
+                label="Call"
+                size="small"
+                onPress={() => Linking.openURL('tel:0322550617')}
+                style={{ flex: 1 }}
+              />
             </View>
-          )}
-
-        </Card>
+          </Card>
+        ) : (
+          <Card style={[styles.mapCard, { borderColor: theme.border }]}>
+            <View style={styles.directionsRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.mapLabel, { color: theme.inkFaint }]}>EVENT VENUE</Text>
+                <Text style={[styles.venueText, { color: theme.ink }]}>{event.venue}</Text>
+                <Text style={[styles.venueAddress, { color: theme.inkMuted }]}>{event.address}</Text>
+              </View>
+            </View>
+            <View style={styles.actionButtons}>
+              <Button
+                label="Get Directions"
+                variant="outline"
+                size="small"
+                onPress={() => {
+                  const lat = event.latitude;
+                  const lng = event.longitude;
+                  if (lat && lng) {
+                    const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${lng},${lat}?destination=${lng},${lat}&(access_token=pk.eyJ1IjoiZGVtby1hY2NvdW50IiwiYSI6ImNsRGVtb0FQMTMxZzIycnF2NzZ6Zmh4eXgifQ.R6JADKqMnUOPmS9la6qQMQ`;
+                    Linking.openURL(url);
+                  }
+                }}
+                disabled={!event.latitude || !event.longitude}
+                style={{ flex: 1 }}
+              />
+              <Button
+                label="Call"
+                size="small"
+                onPress={() => Linking.openURL('tel:0322550617')}
+                style={{ flex: 1 }}
+              />
+            </View>
+          </Card>
+        )}
 
         <Text style={[styles.sectionLabel, { color: theme.ink }]}>About this drive</Text>
         <Text style={[styles.body, { color: theme.inkMuted }]}>{event.description}</Text>
@@ -177,15 +228,7 @@ export default function EventDetailsScreen() {
               label="Log Donation"
               variant="outline"
               onPress={() =>
-                router.push({
-                  pathname: '/donate/log',
-                  params: {
-                    eventId: event.id,
-                    date: event.date,
-                    venue: event.venue,
-                    branch: event.organizer,
-                  },
-                })
+                router.push('/donate/log?eventId=' + event.id + '&date=' + encodeURIComponent(event.date) + '&venue=' + encodeURIComponent(event.venue) + '&branch=' + encodeURIComponent(event.organizer))
               }
               style={{ marginTop: spacing.md }}
             />
@@ -219,7 +262,7 @@ export default function EventDetailsScreen() {
                 <CheckCircle2 size={54} color={theme.teal} />
                 <Text style={[styles.successTitle, { color: theme.ink }]}>Slot Confirmed!</Text>
                 <Text style={[styles.successSubtitle, { color: theme.inkMuted }]}>
-                  A confirmation email has been dispatched to cebu@redcross.org.ph and your registered email address.
+                  A confirmation email will be sent to your registered email address.
                 </Text>
                 
                 {/* Visual Registration Ticket */}
@@ -386,9 +429,13 @@ const styles = StyleSheet.create({
   confirmTitle: { ...typography.h2 },
 
   // Map preview styles
-  mapCard: { height: 210, padding: 8, gap: 4 },
-  mapLabel: { ...typography.eyebrow, fontSize: 9, paddingLeft: 4, marginBottom: 4 },
+  mapCard: { padding: spacing.md, gap: spacing.sm },
+  mapLabel: { ...typography.eyebrow, fontSize: 9, marginBottom: 4 },
   mapView: { flex: 1, borderRadius: radius.sm, overflow: 'hidden' },
+  directionsRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  venueText: { ...typography.bodyStrong, fontSize: 15 },
+  venueAddress: { ...typography.caption, marginTop: 2 },
+  actionButtons: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm },
 
   // Modal styling
   modalOverlay: {

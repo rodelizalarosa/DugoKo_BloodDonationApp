@@ -1,7 +1,7 @@
 import { useRouter } from 'expo-router';
 import { ChevronDown, Filter, Megaphone, MessageSquareHeart, Siren } from 'lucide-react-native';
 import React from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, Text, View, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
@@ -14,6 +14,9 @@ import { DonorStoryCreateModal } from '@/components/community/DonorStoryCreateMo
 import { useProfile } from '@/lib/hooks/useProfile';
 import { useCommunity } from '@/lib/hooks/useCommunity';
 import { useToast } from '@/context/ToastContext';
+import { canDonateTo } from '@/lib/blood-utils';
+import { HelpFormModal } from '@/components/home/HelpFormModal';
+import { supabase } from '@/lib/supabase';
 
 const typeMeta: Record<CommunityPost['type'], { icon: any; tone: 'crimson' | 'teal' | 'amber'; label: string }> = {
   request: { icon: Siren, tone: 'crimson', label: 'Blood Request' },
@@ -23,12 +26,23 @@ const typeMeta: Record<CommunityPost['type'], { icon: any; tone: 'crimson' | 'te
 
 export default function CommunityScreen() {
   const router = useRouter();
-  const { theme } = useTheme();
   const [timeFilter, setTimeFilter] = React.useState<'all' | 'today' | 'week' | 'month'>('all');
 
   const { profile } = useProfile();
-  const { posts, createBloodRequest, createStoryOrAnnouncement } = useCommunity();
+  const { posts, requests, createBloodRequest, createStoryOrAnnouncement, pledgeRequest } = useCommunity();
   const { showToast } = useToast();
+  const { theme, isDarkMode } = useTheme();
+
+  const [selectedRequest, setSelectedRequest] = React.useState<any>(null);
+  const [showHelperModal, setShowHelperModal] = React.useState(false);
+
+  const openCanHelpFlow = (requestId: string) => {
+    const req = requests.find(r => r.id === requestId);
+    if (req) {
+      setSelectedRequest(req);
+      setShowHelperModal(true);
+    }
+  };
 
   // Posting eligibility — safe-guard when profile is still loading
   const eligibility = calculateEligibility(profile?.lastDonationDate ?? null, profile?.sex);
@@ -36,11 +50,18 @@ export default function CommunityScreen() {
   const mappedStatus: 'eligible' | 'deferred' | 'not_eligible' =
     eligibility.status === 'eligible' ? 'eligible' : eligibility.status === 'deferred' ? 'deferred' : 'not_eligible';
 
+  // Eligibility check for posting blood requests (requires prior donations)
   const requesterEligibility = {
     status:
       profile?.profileComplete && (profile?.totalDonations ?? 0) > 0 ? mappedStatus : 'not_eligible',
     daysRemaining: eligibility.daysRemaining,
   } as const;
+
+  // Donor stories are always available for anyone to share
+  const storyEligibility = {
+    status: 'eligible' as const,
+    daysRemaining: 0,
+  };
 
   const [showBloodRequestModal, setShowBloodRequestModal] = React.useState(false);
   const [showDonorStoryModal, setShowDonorStoryModal] = React.useState(false);
@@ -79,38 +100,36 @@ export default function CommunityScreen() {
         <Text style={[styles.heading, { color: theme.ink }]}>Community</Text>
         <Text style={[styles.subheading, { color: theme.inkMuted }]}>Requests, stories, and updates from fellow donors</Text>
 
-        <View style={styles.createActions}>
-          <Pressable
-            style={[styles.actionBtn, { backgroundColor: theme.surface, borderColor: theme.border, opacity: requesterEligibility.status !== 'eligible' ? 0.6 : 1 }]}
-            onPress={() => requesterEligibility.status === 'eligible' && setShowBloodRequestModal(true)}
+        <View style={[styles.createActions, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+          <Pressable 
+            style={styles.whatsOnYourMind}
+            onPress={() => setShowBloodRequestModal(true)}
           >
-            <View style={[styles.actionIcon, { backgroundColor: theme.paper }]}>
-              <Siren size={16} color={theme.crimson} />
+            <View style={[styles.avatarSmall, { backgroundColor: theme.crimsonLight }]}>
+              <Text style={[styles.avatarTextSmall, { color: theme.crimson }]}>{profile?.full_name?.[0] || '?'}</Text>
             </View>
-            <Text style={[styles.actionLabel, { color: theme.ink }]}>Blood request</Text>
-          </Pressable>
-
-          <Pressable
-            style={[styles.actionBtn, { backgroundColor: theme.surface, borderColor: theme.border, opacity: requesterEligibility.status !== 'eligible' ? 0.6 : 1 }]}
-            onPress={() => requesterEligibility.status === 'eligible' && setShowDonorStoryModal(true)}
-          >
-            <View style={[styles.actionIcon, { backgroundColor: theme.paper }]}>
-              <MessageSquareHeart size={16} color={theme.teal} />
-            </View>
-            <Text style={[styles.actionLabel, { color: theme.ink }]}>Donor story</Text>
-          </Pressable>
-        </View>
-
-        {requesterEligibility.status !== 'eligible' && (
-          <View style={[styles.blockedNotice, { borderColor: theme.border }]}>
-            <Text style={[styles.blockedNoticeTitle, { color: theme.crimson }]}>Posting locked</Text>
-            <Text style={[styles.blockedNoticeText, { color: theme.inkMuted }]}>
-              {requesterEligibility.status === 'deferred'
-                ? `You’ll be eligible in ${requesterEligibility.daysRemaining ?? 0} days.`
-                : 'You must be eligible (Red Cross health checks + donation eligibility) to post.'}
+            <Text style={[styles.whatsOnYourMindText, { color: theme.inkMuted }]}>
+              Urgently need blood? Request here...
             </Text>
+          </Pressable>
+          <View style={styles.createButtonsRow}>
+            <TouchableOpacity 
+              style={styles.createBtnItem}
+              onPress={() => setShowBloodRequestModal(true)}
+            >
+              <Siren size={16} color={theme.crimson} />
+              <Text style={[styles.createBtnLabel, { color: theme.ink }]}>Request</Text>
+            </TouchableOpacity>
+            <View style={[styles.createBtnDivider, { backgroundColor: theme.border }]} />
+            <TouchableOpacity 
+              style={styles.createBtnItem}
+              onPress={() => setShowDonorStoryModal(true)}
+            >
+              <MessageSquareHeart size={16} color={theme.teal} />
+              <Text style={[styles.createBtnLabel, { color: theme.ink }]}>Story</Text>
+            </TouchableOpacity>
           </View>
-        )}
+        </View>
 
         <View style={styles.actions}>
           {(Object.keys(typeMeta) as CommunityPost['type'][]).map((type) => {
@@ -122,15 +141,9 @@ export default function CommunityScreen() {
                 onPress={() => router.push(`/community/category/${type}`)}
               >
                 <View style={[styles.actionIcon, { backgroundColor: theme.paper }]}>
-                  <meta.icon size={22} color={theme.crimson} />
+                  <meta.icon size={20} color={theme.crimson} />
                 </View>
-                <Text
-                  style={[styles.actionLabel, { color: theme.ink }]}
-                  numberOfLines={1}
-                  adjustsFontSizeToFit
-                >
-                  {meta.label}
-                </Text>
+                <Text style={[styles.actionLabel, { color: theme.ink }]}>{meta.label}</Text>
               </Pressable>
             );
           })}
@@ -166,7 +179,7 @@ export default function CommunityScreen() {
         <DonorStoryCreateModal
           visible={showDonorStoryModal}
           onClose={() => setShowDonorStoryModal(false)}
-          requesterEligibility={requesterEligibility}
+          requesterEligibility={storyEligibility}
           onSubmitted={async (payload) => {
             const { error } = await createStoryOrAnnouncement(payload.title, payload.body, 'story');
             if (error) {
@@ -239,14 +252,81 @@ export default function CommunityScreen() {
                   <Text style={[styles.body, { color: theme.inkMuted }]} numberOfLines={2}>
                     {post.body}
                   </Text>
-                  <Text style={[styles.author, { color: theme.inkFaint }]}>
-                    {post.authorName} · {timeAgo(post.postedAt)}
-                  </Text>
+                  <View style={styles.authorRow}>
+                    <Text style={[styles.author, { color: theme.inkFaint }]}>
+                      {post.authorName} · {timeAgo(post.postedAt)}
+                    </Text>
+                  </View>
+
+                  {post.type === 'request' && post.relatedRequestId && (
+                    <View style={styles.cardFooter}>
+                      {profile && requests.find(r => r.id === post.relatedRequestId) && 
+                       canDonateTo(profile.bloodType, requests.find(r => r.id === post.relatedRequestId)!.bloodTypeNeeded) ? (
+                        <Pressable 
+                          style={[styles.miniCta, { backgroundColor: theme.crimson }]}
+                          onPress={(e) => {
+                            e.stopPropagation();
+                            openCanHelpFlow(post.relatedRequestId!);
+                          }}
+                        >
+                          <Text style={styles.miniCtaText}>I Can Help</Text>
+                        </Pressable>
+                      ) : (
+                        <View style={styles.matchedIncompatible}>
+                          <Text style={[styles.incompatibleText, { color: theme.inkFaint }]}>
+                            Incompatible Blood Type
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                  )}
                 </Card>
               </Pressable>
             );
           })}
         </View>
+
+        {selectedRequest && profile && (
+          <HelpFormModal
+            visible={showHelperModal}
+            request={selectedRequest}
+            user={profile}
+            onClose={() => setShowHelperModal(false)}
+            onSubmit={async ({ helper_name, helper_contact, helper_email }) => {
+              const { error } = await pledgeRequest(selectedRequest.id, {
+                helper_name,
+                helper_contact,
+                helper_email
+              });
+
+              if (error) {
+                showToast({ type: 'error', title: 'Pledge failed', message: error });
+              } else {
+                // Send email confirmation to helper
+                try {
+                  await supabase.functions.invoke('send-helper-confirmation', {
+                    body: {
+                      helper_email: helper_email,
+                      helper_name: helper_name,
+                      request_hospital: selectedRequest.hospital,
+                      request_blood_type: selectedRequest.bloodTypeNeeded,
+                      requester_name: selectedRequest.authorName || 'Blood Requester',
+                    }
+                  });
+                } catch (emailErr) {
+                  console.log('Email notification skipped:', emailErr);
+                }
+
+                showToast({
+                  type: 'success',
+                  title: 'Thank you!',
+                  message: `Your offer to help at ${selectedRequest.hospital} has been sent.`,
+                });
+                setShowHelperModal(false);
+              }
+            }}
+          />
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -267,7 +347,57 @@ const styles = StyleSheet.create({
   content: { padding: spacing.lg, paddingBottom: spacing.xxl * 2 },
   heading: { ...typography.display },
   subheading: { ...typography.body, marginBottom: spacing.md },
-  createActions: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.md },
+  createActions: {
+    borderWidth: 1,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+  },
+  whatsOnYourMind: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingBottom: spacing.md,
+    borderBottomWidth: 0.5,
+    borderBottomColor: 'rgba(0,0,0,0.05)',
+  },
+  avatarSmall: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarTextSmall: {
+    ...typography.caption,
+    fontWeight: '800',
+  },
+  whatsOnYourMindText: {
+    ...typography.body,
+    fontSize: 14,
+  },
+  createButtonsRow: {
+    flexDirection: 'row',
+    paddingTop: spacing.sm,
+    alignItems: 'center',
+  },
+  createBtnItem: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    paddingVertical: 4,
+  },
+  createBtnLabel: {
+    ...typography.caption,
+    fontWeight: '600',
+  },
+  createBtnDivider: {
+    width: 1,
+    height: 16,
+    marginHorizontal: spacing.xs,
+  },
   blockedNotice: {
     borderWidth: 1,
     borderRadius: radius.md,
@@ -336,8 +466,13 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   title: { ...typography.h2 },
   body: { ...typography.body },
+  authorRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   author: { ...typography.caption, marginTop: spacing.xs },
-
+  cardFooter: { marginTop: spacing.sm, borderTopWidth: 0.5, borderTopColor: 'rgba(0,0,0,0.05)', paddingTop: spacing.xs },
+  miniCta: { paddingVertical: 6, paddingHorizontal: 12, borderRadius: radius.sm, alignSelf: 'flex-start' },
+  miniCtaText: { ...typography.caption, color: '#FFF', fontWeight: '700' },
+  matchedIncompatible: { paddingVertical: 6 },
+  incompatibleText: { fontSize: 10, fontStyle: 'italic' },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'center', padding: spacing.lg },
   modalSheet: { borderWidth: 1, borderRadius: radius.lg, padding: spacing.lg, gap: spacing.md },
   modalTitle: { ...typography.h2, fontWeight: '900' },

@@ -1,24 +1,27 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Bell, MapPin, Moon, Sparkles, Sun } from 'lucide-react-native';
-import React, { useMemo } from 'react';
-import { FlatList, ScrollView, StyleSheet, TouchableOpacity, View, Text, Dimensions } from 'react-native';
+import { Bell, Droplets, Moon, Sun, MapPin, AlertCircle, ArrowRight } from 'lucide-react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, FlatList, StyleSheet, TouchableOpacity, View, Text, Dimensions, ScrollView } from 'react-native';
+
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { HelperRegistrationModal } from '@/components/community/HelperRegistrationModal';
 import { AskDonaFAB } from '@/components/home/AskDonaFAB';
 import { GreetingCard } from '@/components/home/GreetingCard';
 import { NotificationModal } from '@/components/home/NotificationModal';
 import { UpcomingEventCard } from '@/components/home/UpcomingEventCard';
-import Map from '@/components/ui/Map';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { HelpFormModal } from '@/components/home/HelpFormModal';
 import { spacing, typography, radius } from '@/constants/theme';
-import { getRecommendedDonors } from '@/lib/smartBloodMatching';
+import { canDonateTo, getCompatibleRecipients } from '@/lib/blood-utils';
 import { useTheme } from '@/context/ThemeContext';
 import { useProfile } from '@/lib/hooks/useProfile';
 import { useCentersAndEvents } from '@/lib/hooks/useCentersAndEvents';
 import { useCommunity } from '@/lib/hooks/useCommunity';
 import { useDonors } from '@/lib/hooks/useDonors';
+import { useNotifications } from '@/lib/hooks/useNotifications';
 import { useToast } from '@/context/ToastContext';
+import type { BloodRequest } from '@/types';
+import { supabase } from '@/lib/supabase';
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -26,13 +29,31 @@ export default function HomeScreen() {
   const { isDarkMode, theme, setThemePreference } = useTheme();
   const { showToast } = useToast();
   const [showNotifications, setShowNotifications] = React.useState(false);
-  const [showHelperModal, setShowHelperModal] = React.useState(false);
-  const [activeRequestId, setActiveRequestId] = React.useState<string | null>(null);
+  const [showHelpModal, setShowHelpModal] = useState(false);
+  const [selectedRequest, setSelectedRequest] = useState<BloodRequest | null>(null);
 
   const { profile, isLoading, updateProfile } = useProfile();
-  const { centers, events } = useCentersAndEvents();
-  const { requests, pledgeRequest } = useCommunity();
+  const { centers, events, isLoading: centersLoading, error: centersError } = useCentersAndEvents();
+  const { requests, error: communityError, pledgeRequest, getUserPledge } = useCommunity();
   const { donors } = useDonors();
+  const { notifications, unreadCount, markAsRead } = useNotifications();
+
+  // Check if user has already pledged to the latest compatible request
+  const [hasPledged, setHasPledged] = useState(false);
+  const [checkingPledge, setCheckingPledge] = useState(true);
+
+  useEffect(() => {
+    async function checkPledge() {
+      if (!latestCompatibleRequest || !profile) {
+        setCheckingPledge(false);
+        return;
+      }
+      const pledged = await getUserPledge(latestCompatibleRequest.id);
+      setHasPledged(pledged);
+      setCheckingPledge(false);
+    }
+    checkPledge();
+  }, [latestCompatibleRequest, profile, getUserPledge]);
 
   const [isWide, setIsWide] = React.useState(Dimensions.get('window').width >= 700);
   React.useEffect(() => {
@@ -60,66 +81,35 @@ export default function HomeScreen() {
     [requests]
   );
 
-  const urgentRequest = openRequests[0] ?? null;
-
   const latestEvent = useMemo(
     () => [...events].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0] ?? null,
     [events]
   );
 
-  const mapMarkers = useMemo(
-    () => [
-      ...centers.map((center) => ({
-        id: center.id,
-        latitude: center.latitude,
-        longitude: center.longitude,
-        title: center.name,
-        description: center.address,
-      })),
-      ...events
-        .filter((event) => typeof event.latitude === 'number' && typeof event.longitude === 'number')
-        .map((event) => ({
-          id: event.id,
-          latitude: event.latitude as number,
-          longitude: event.longitude as number,
-          title: event.title,
-          description: event.venue,
-        })),
-    ],
-    [centers, events]
-  );
+  const candidateDonors = donors;
 
-  const candidateDonors = useMemo(
-    () => (profile ? [{ ...profile, distanceKm: 3 }, ...donors] : donors),
-    [profile, donors]
-  );
+  // Filter requests that user is compatible with (user's blood type can donate to request's blood type)
+  const myCompatibleRequests = useMemo(() => {
+    if (!profile?.bloodType) return [];
+    return openRequests.filter(r => canDonateTo(profile.bloodType, r.bloodTypeNeeded));
+  }, [profile, openRequests]);
 
-  const recommendedDonors = urgentRequest ? getRecommendedDonors({ request: urgentRequest, candidateDonors }) : [];
+  // Get the single latest request user can help with
+  const latestCompatibleRequest = myCompatibleRequests[0] || null;
+
+  // Get compatible donors for the specific request displayed
+  const matchedDonors = useMemo(() => {
+    if (!latestCompatibleRequest) return [];
+    return candidateDonors
+      .filter(d => d.id !== profile?.id && canDonateTo(latestCompatibleRequest.bloodTypeNeeded, d.bloodType))
+      .slice(0, 3);
+  }, [latestCompatibleRequest, candidateDonors, profile]);
 
   const handleThemeToggle = async () => {
     const preference = isDarkMode ? 'light' : 'dark';
     await setThemePreference(preference);
     await updateProfile({ theme_preference: preference });
   };
-
-  const openCanHelpFlow = () => {
-    if (!urgentRequest || !profile) return;
-    if (profile.eligibilityStatus !== 'eligible') {
-      router.push({
-        pathname: '/donate/eligibility',
-        params: { helpRequestId: urgentRequest.id },
-      });
-      return;
-    }
-    setActiveRequestId(urgentRequest.id);
-    setShowHelperModal(true);
-  };
-
-  React.useEffect(() => {
-    if (!params.helpRequestId || !profile || profile.eligibilityStatus !== 'eligible') return;
-    setActiveRequestId(params.helpRequestId);
-    setShowHelperModal(true);
-  }, [params.helpRequestId, profile]);
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.paper }]} edges={['top']}>
@@ -134,11 +124,35 @@ export default function HomeScreen() {
             onPress={() => setShowNotifications(true)}
           >
             <Bell size={20} color={theme.ink} />
+            {unreadCount > 0 && (
+              <View style={[styles.badge, { backgroundColor: theme.crimson }]}>
+                <Text style={styles.badgeTextCount}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
+              </View>
+            )}
           </TouchableOpacity>
         </View>
       </View>
 
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        style={styles.scrollView} 
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+      >
+        {(centersError || communityError) && (
+          <View style={{ marginHorizontal: spacing.lg, padding: spacing.sm, backgroundColor: theme.crimsonLight, borderRadius: radius.sm, marginBottom: spacing.sm }}>
+            <Text style={[typography.caption, { color: theme.crimson }]}>
+              Sync Error: {centersError || communityError}
+            </Text>
+          </View>
+        )}
+
+        {/**
+         * NOTE: This screen uses a FlatList (VirtualizedList) for urgent requests.
+         * A plain ScrollView wrapper + nested FlatList can trigger the RN warning:
+         * "VirtualizedLists should never be nested inside plain ScrollViews".
+         *
+         * Replace the outer ScrollView with a View so the FlatList owns its own scrolling.
+         */}
         {isLoading ? (
           <View style={{ padding: spacing.xl, alignItems: 'center' }}>
             <Text style={[typography.body, { color: theme.inkFaint }]}>Loading your profile...</Text>
@@ -164,78 +178,101 @@ export default function HomeScreen() {
                 <Card style={styles.matchCard}>
                   <View style={styles.sectionHeader}>
                     <View style={styles.sectionHeaderRow}>
-                      <Sparkles size={16} color={theme.crimson} />
-                      <Text style={[styles.sectionLabel, { color: theme.crimson }]}>Smart Blood Type Matching</Text>
+                      <Droplets size={16} color={theme.crimson} />
+                      <Text style={[styles.sectionLabel, { color: theme.crimson }]}>Blood Type Matching</Text>
                     </View>
-                    <Text style={[styles.sectionBody, { color: theme.inkMuted }]}>
-                      Compatible donors ranked by blood type, eligibility, last donation, and distance.
-                    </Text>
                   </View>
 
-                  <View style={styles.matchList}>
-                    {recommendedDonors.length > 0 ? (
-                      recommendedDonors.slice(0, 2).map((donor, index) => (
-                        <View key={donor.donorId} style={[styles.matchRow, { borderColor: theme.border }]}>
-                          <View style={[styles.rankBadge, { backgroundColor: theme.crimsonLight }]}>
-                            <Text style={[styles.rankBadgeText, { color: theme.crimson }]}>{index + 1}</Text>
-                          </View>
+                  {profile?.bloodType ? (
+                    <View style={{ marginBottom: spacing.md }}>
+                      <Text style={[styles.sectionTitle, { color: theme.ink, fontSize: 20, marginTop: 0 }]}>
+                        Your Blood Type: {profile.bloodType}
+                      </Text>
+                      <Text style={[styles.sectionBody, { color: theme.inkMuted, marginTop: spacing.xs }]}>
+                        You can donate to: {getCompatibleRecipients(profile.bloodType).join(', ')}
+                      </Text>
+                    </View>
+                  ) : (
+                    <Text style={[styles.sectionBody, { color: theme.inkMuted, marginBottom: spacing.md }]}>
+                      Set your blood type in your profile to see who you can help.
+                    </Text>
+                  )}
+
+                  {/* Urgent Requests Section - Single Latest Request */}
+                  {latestCompatibleRequest && profile?.bloodType && (
+                    <View style={{ marginBottom: spacing.md }}>
+                      <Text style={[styles.urgentSectionTitle, { color: theme.ink, marginBottom: spacing.sm }]}>
+                        Latest Request You Can Help
+                      </Text>
+                      <View style={[styles.urgentItem, { borderColor: theme.border }]}>
+                        <View style={styles.urgentItemTop}>
                           <View style={{ flex: 1 }}>
-                            <Text style={[styles.matchName, { color: theme.ink }]}>{donor.donorName}</Text>
-                            <Text style={[styles.matchMeta, { color: theme.inkMuted }]}>
-                              {donor.bloodType} · {donor.isEligible ? 'Eligible' : 'Not eligible'} · {donor.distanceKm} km away
+                            <Text style={[styles.urgentHospital, { color: theme.ink }]}>{latestCompatibleRequest.hospital}</Text>
+                            <Text style={[styles.urgentMeta, { color: theme.inkMuted }]}>
+                              {latestCompatibleRequest.bloodTypeNeeded} · {latestCompatibleRequest.unitsNeeded} unit(s)
                             </Text>
                           </View>
+                          <View style={[styles.urgencyPill, { backgroundColor: latestCompatibleRequest.urgencyLevel === 'critical' ? theme.crimson : latestCompatibleRequest.urgencyLevel === 'urgent' ? '#F59E0B' : '#10B981' }]}>
+                            <Text style={[styles.urgencyPillText, { color: '#FFF' }]}>{latestCompatibleRequest.urgencyLevel}</Text>
+                          </View>
                         </View>
-                      ))
+                      </View>
+                    </View>
+                  )}
+
+                  {/* Matched Donors Section */}
+                  <View style={styles.matchList}>
+                    {matchedDonors.length > 0 ? (
+                      <>
+                        <Text style={[styles.urgentSectionTitle, { color: theme.ink, marginBottom: spacing.sm }]}>
+                          Compatible Donors
+                        </Text>
+                        {matchedDonors.map((donor, index) => (
+                          <View key={donor.id} style={[styles.matchRow, { borderColor: theme.border }]}>
+                            <View style={[styles.rankBadge, { backgroundColor: theme.crimsonLight }]}>
+                              <Text style={[styles.rankBadgeText, { color: theme.crimson }]}>{index + 1}</Text>
+                            </View>
+                            <View style={{ flex: 1 }}>
+                              <Text style={[styles.matchName, { color: theme.ink }]}>{donor.firstName} {donor.lastName}</Text>
+                              <Text style={[styles.matchMeta, { color: theme.inkMuted }]}>
+                                Compatible Donor · {donor.bloodType}
+                              </Text>
+                            </View>
+                          </View>
+                        ))}
+                      </>
                     ) : (
                       <Text style={[styles.sectionBody, { color: theme.inkMuted }]}>
-                        Smart matches will appear when an urgent request is available.
+                        Compatible donors will appear here.
                       </Text>
                     )}
                   </View>
 
                   <View style={styles.matchCta}>
-                    <Text style={[styles.ctaText, { color: theme.ink }]}>Check your eligibility.</Text>
-                    <Button label="Check Eligibility" onPress={openCanHelpFlow} />
+                    {checkingPledge ? (
+                      <ActivityIndicator color={theme.crimson} />
+                    ) : latestCompatibleRequest && profile?.bloodType ? (
+                      hasPledged ? (
+                        <Text style={[styles.ctaText, { color: theme.teal }]}>
+                          You already pledged to help
+                        </Text>
+                      ) : (
+                        <Button
+                          label="I Can Help"
+                          onPress={() => {
+                            setSelectedRequest(latestCompatibleRequest);
+                            setShowHelpModal(true);
+                          }}
+                        />
+                      )
+                    ) : (
+                      <Text style={[styles.ctaText, { color: theme.ink }]}>
+                        {profile?.bloodType ? 'No compatible requests nearby' : 'Set your blood type to help'}
+                      </Text>
+                    )}
                   </View>
                 </Card>
               </View>
-
-              <Card style={[styles.urgentCard, isWide ? styles.urgentCardWide : styles.urgentCardNarrow]}>
-                <View style={styles.sectionHeader}>
-                  <Text style={[styles.sectionLabel, { color: theme.crimson }]}>Urgent Requests</Text>
-                  <Text style={[styles.sectionBody, { color: theme.inkMuted }]}>Open requests.</Text>
-                </View>
-
-                <FlatList
-                  data={openRequests}
-                  keyExtractor={(item) => item.id}
-                  showsVerticalScrollIndicator={false}
-                  nestedScrollEnabled
-                  style={styles.urgentList}
-                  contentContainerStyle={{ gap: spacing.sm, paddingBottom: spacing.xs }}
-                  renderItem={({ item }) => (
-                    <View style={[styles.urgentItem, { borderColor: theme.border, backgroundColor: theme.paper }]}>
-                      <View style={styles.urgentItemTop}>
-                        <View style={{ flex: 1 }}>
-                          <Text style={[styles.urgentHospital, { color: theme.ink }]} numberOfLines={1}>
-                            {item.hospital}
-                          </Text>
-                          <Text style={[styles.urgentMeta, { color: theme.inkMuted }]} numberOfLines={2}>
-                            {item.bloodTypeNeeded} · {item.unitsNeeded - item.unitsPledged} units needed
-                          </Text>
-                        </View>
-                        <View style={[styles.urgencyPill, { backgroundColor: theme.crimsonLight }]}>
-                          <Text style={[styles.urgencyPillText, { color: theme.crimson }]}>{item.urgencyLevel}</Text>
-                        </View>
-                      </View>
-                      <Text style={[styles.urgentNotes, { color: theme.inkMuted }]} numberOfLines={3}>
-                        {item.notes || 'Awaiting compatible donors.'}
-                      </Text>
-                    </View>
-                  )}
-                />
-              </Card>
             </View>
           </>
         ) : (
@@ -247,91 +284,71 @@ export default function HomeScreen() {
           </Card>
         )}
 
-        <Card style={[styles.mapCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-          <View style={styles.sectionHeader}>
-            <Text style={[styles.sectionLabel, { color: theme.crimson }]}>Map View</Text>
-            <Text style={[styles.sectionBody, { color: theme.inkMuted }]}>Tap a pin to view a drive or center.</Text>
-          </View>
-
-          {mapMarkers.length > 0 ? (
-            <View style={styles.mapWrap}>
-              <Map
-                style={styles.map}
-                centerLatitude={mapMarkers[0].latitude}
-                centerLongitude={mapMarkers[0].longitude}
-                zoom={12}
-                markers={mapMarkers}
-              />
-            </View>
-          ) : (
-            <View style={styles.mapEmpty}>
-              <Text style={[styles.sectionBody, { color: theme.inkMuted }]}>
-                Add a center or event to show it on the map.
-              </Text>
-            </View>
-          )}
-
-          <View style={styles.legendRow}>
-            <View style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: theme.crimson }]} />
-              <Text style={[styles.legendText, { color: theme.inkMuted }]}>Blood drive</Text>
-            </View>
-            <View style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: theme.teal }]} />
-              <Text style={[styles.legendText, { color: theme.inkMuted }]}>Donation center</Text>
-            </View>
-          </View>
-          <View style={styles.mapLegendNote}>
-            <MapPin size={14} color={theme.crimson} />
-            <Text style={[styles.mapLegendText, { color: theme.inkMuted }]}>
-              Red pins mark blood drives. Teal pins mark donation centers.
-            </Text>
-          </View>
-        </Card>
 
         <View style={{ height: spacing.xxl * 2 }} />
       </ScrollView>
+
 
       <AskDonaFAB />
 
       <NotificationModal
         visible={showNotifications}
         onClose={() => setShowNotifications(false)}
-        notifications={
-          urgentRequest && recommendedDonors.some((d) => d.donorId === profile?.id && d.isEligible)
-            ? [
-                {
-                  id: urgentRequest.id,
-                  title: `Someone nearby urgently needs ${urgentRequest.bloodTypeNeeded} blood.`,
-                  body: 'You are eligible and compatible. Would you like to help?',
-                  type: 'critical',
-                  timestamp: new Date().toISOString(),
-                  read: false,
-                },
-              ]
-            : []
-        }
+        onMarkAsRead={markAsRead}
+        notifications={notifications.map(n => ({
+          id: n.id,
+          title: n.title,
+          body: n.message,
+          type: (n.type === 'request_response' ? 'success' : 'info') as any,
+          timestamp: n.created_at,
+          read: n.is_read
+        }))}
       />
 
-      {urgentRequest && (
-        <HelperRegistrationModal
-          visible={showHelperModal}
-          requesterLabel={`${urgentRequest.hospital} (${urgentRequest.bloodTypeNeeded})`}
-          initialFullName={profile ? `${profile.firstName} ${profile.lastName}`.trim() : ''}
-          initialContactNumber={profile?.phone ?? ''}
-          initialEmail={profile?.email ?? ''}
-          onClose={() => setShowHelperModal(false)}
-          onSubmitted={async ({ fullName, contactNumber, email }) => {
-            const { error } = await pledgeRequest(activeRequestId ?? urgentRequest.id, {
-              helper_name: fullName,
-              helper_contact: contactNumber,
-              helper_email: email,
+      {selectedRequest && profile && (
+        <HelpFormModal
+          visible={showHelpModal}
+          request={selectedRequest}
+          user={profile}
+          onClose={() => {
+            setShowHelpModal(false);
+            setSelectedRequest(null);
+          }}
+          onSubmit={async ({ helper_name, helper_contact, helper_email }) => {
+            // Pledge to the request
+            const { error } = await pledgeRequest(selectedRequest.id, {
+              helper_name,
+              helper_contact,
+              helper_email
             });
+
+            if (error) {
+              showToast({ type: 'error', title: 'Error', message: error });
+              return;
+            }
+
+            // Send email confirmation to helper
+            try {
+              await supabase.functions.invoke('send-helper-confirmation', {
+                body: {
+                  helper_email: helper_email,
+                  helper_name: helper_name,
+                  request_hospital: selectedRequest.hospital,
+                  request_blood_type: selectedRequest.bloodTypeNeeded,
+                  requester_name: selectedRequest.authorName || 'Blood Requester',
+                }
+              });
+            } catch (emailErr) {
+              console.log('Email notification skipped:', emailErr);
+            }
+
             showToast({
-              type: error ? 'error' : 'success',
-              title: error ? 'Unable to submit' : 'Help offer submitted',
-              message: error ?? 'A confirmation email will be sent. The requester will see your name and contact number.',
+              type: 'success',
+              title: 'Thank you!',
+              message: `Your offer to help at ${selectedRequest.hospital} has been sent.`,
             });
+            setShowHelpModal(false);
+            setSelectedRequest(null);
           }}
         />
       )}
@@ -341,6 +358,7 @@ export default function HomeScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1 },
+  scrollView: { flex: 1 },
   content: { paddingBottom: spacing.xl },
   header: {
     flexDirection: 'row',
@@ -365,6 +383,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
     elevation: 2,
+    position: 'relative',
+  },
+  badge: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+    borderWidth: 1.5,
+    borderColor: '#FFF',
+  },
+  badgeTextCount: {
+    color: '#FFF',
+    fontSize: 9,
+    fontWeight: '700',
   },
   masonryRow: {
     flexDirection: 'column',
@@ -418,6 +455,10 @@ const styles = StyleSheet.create({
   sectionTitle: {
     ...typography.h2,
     marginTop: spacing.sm,
+  },
+  urgentSectionTitle: {
+    ...typography.bodyStrong,
+    fontSize: 14,
   },
   sectionBody: {
     ...typography.body,
@@ -485,7 +526,6 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   urgentCardNarrow: {
-    width: '100%',
     marginHorizontal: spacing.lg,
     minHeight: 'auto',
   },
@@ -518,6 +558,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 999,
+  },
+  viewRequestBtn: {
+    marginTop: spacing.sm,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    alignItems: 'center',
+  },
+  viewRequestText: {
+    ...typography.bodyStrong,
+    fontSize: 13,
   },
   urgencyPillText: {
     ...typography.caption,

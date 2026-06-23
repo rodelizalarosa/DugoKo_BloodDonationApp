@@ -1,5 +1,5 @@
 import { useLocalSearchParams } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Badge } from '@/components/ui/Badge';
@@ -7,21 +7,55 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ScreenHeader } from '@/components/ui/ScreenHeader';
-import { spacing, typography } from '@/constants/theme';
+import { radius, spacing, typography } from '@/constants/theme';
 import { useTheme } from '@/context/ThemeContext';
 import { useCommunity } from '@/lib/hooks/useCommunity';
+import { useProfile } from '@/lib/hooks/useProfile';
+import { canDonateTo } from '@/lib/blood-utils';
 import { HelperRegistrationModal } from '@/components/community/HelperRegistrationModal';
 import { useToast } from '@/context/ToastContext';
+import { supabase } from '@/lib/supabase';
 
 export default function CommunityPostDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { theme } = useTheme();
-  const { posts, requests, isLoading, pledgeRequest } = useCommunity();
+  const { theme, isDarkMode } = useTheme();
+  const { profile } = useProfile();
+  const { posts, requests, isLoading, pledgeRequest, getUserPledge } = useCommunity();
   const { showToast } = useToast();
   const post = posts.find((p) => p.id === id);
+  // Also check if ID is a request ID (navigated from home page)
+  const directRequest = !post ? requests.find((r) => r.id === id) : undefined;
   const relatedRequest = post?.relatedRequestId
     ? requests.find((r) => r.id === post.relatedRequestId)
-    : undefined;
+    : directRequest;
+
+  // Check if user has already pledged to this request
+  const [hasPledged, setHasPledged] = useState(false);
+  const [checkingPledge, setCheckingPledge] = useState(true);
+
+  useEffect(() => {
+    async function checkPledge() {
+      if (!relatedRequest || !profile) {
+        setCheckingPledge(false);
+        return;
+      }
+      const pledged = await getUserPledge(relatedRequest.id);
+      setHasPledged(pledged);
+      setCheckingPledge(false);
+    }
+    checkPledge();
+  }, [relatedRequest, profile, getUserPledge]);
+
+  // Build synthetic post data from direct request for display
+  const displayPost = post || (directRequest ? {
+    id: directRequest.id,
+    type: 'request' as const,
+    title: `Blood Needed: ${directRequest.bloodTypeNeeded} at ${directRequest.hospital}`,
+    body: directRequest.notes || `Urgent request for ${directRequest.unitsNeeded} units of ${directRequest.bloodTypeNeeded} blood.`,
+    authorName: 'Anonymous',
+    postedAt: directRequest.postedAt,
+  } : null);
+
   const [helperModalVisible, setHelperModalVisible] = useState(false);
   const [helperSubmitted, setHelperSubmitted] = useState(false);
   const [helperFullName, setHelperFullName] = useState<string | null>(null);
@@ -38,7 +72,7 @@ export default function CommunityPostDetailScreen() {
     );
   }
 
-  if (!post) {
+  if (!displayPost && !directRequest) {
     return (
       <SafeAreaView style={styles.safe}>
         <ScreenHeader title="Post" />
@@ -52,25 +86,25 @@ export default function CommunityPostDetailScreen() {
       <ScreenHeader title="Community" />
       <ScrollView contentContainerStyle={styles.content}>
         <Card style={styles.mainCard}>
-          <Text style={[styles.postTitle, { color: theme.ink }]}>{post.title}</Text>
+          <Text style={[styles.postTitle, { color: theme.ink }]}>{displayPost?.title}</Text>
           <View style={styles.authorRow}>
             <View style={[styles.avatar, { backgroundColor: theme.crimsonLight }]}>
-              <Text style={[styles.avatarText, { color: theme.crimson }]}>{post.authorName[0]}</Text>
+              <Text style={[styles.avatarText, { color: theme.crimson }]}>{displayPost?.authorName?.[0] || '?'}</Text>
             </View>
             <View>
-              <Text style={[styles.authorName, { color: theme.ink }]}>{post.authorName}</Text>
-              <Text style={[styles.postTime, { color: theme.inkFaint }]}>{timeAgo(post.postedAt)}</Text>
+              <Text style={[styles.authorName, { color: theme.ink }]}>{displayPost?.authorName || 'Anonymous'}</Text>
+              <Text style={[styles.postTime, { color: theme.inkFaint }]}>{displayPost?.postedAt ? timeAgo(displayPost.postedAt) : 'Recent'}</Text>
             </View>
           </View>
-          
-          <Text style={[styles.postBody, { color: theme.ink }]}>{post.body}</Text>
-          
-          {!relatedRequest && post.type === 'story' && (
-             <Button 
-                label="Share this story" 
-                variant="outline" 
-                style={{ marginTop: spacing.lg }} 
-                fullWidth 
+
+          <Text style={[styles.postBody, { color: theme.ink }]}>{displayPost?.body}</Text>
+
+          {!relatedRequest && displayPost?.type === 'story' && (
+             <Button
+                label="Share this story"
+                variant="outline"
+                style={{ marginTop: spacing.lg }}
+                fullWidth
              />
           )}
         </Card>
@@ -83,31 +117,41 @@ export default function CommunityPostDetailScreen() {
                 {relatedRequest.bloodTypeNeeded}
               </Text>
             </View>
-            
+
             <Text style={[styles.reqHospital, { color: theme.ink }]}>{relatedRequest.hospital}</Text>
             <Text style={[styles.reqAddress, { color: theme.inkMuted }]}>{relatedRequest.address}</Text>
-            
+
             <View style={styles.divider} />
-            
+
             <Text style={[styles.reqNeeds, { color: theme.ink }]}>
               {relatedRequest.unitsNeeded - relatedRequest.unitsPledged} units still needed
             </Text>
-            
+
             {relatedRequest.notes && <Text style={[styles.reqNotes, { color: theme.inkMuted }]}>{relatedRequest.notes}</Text>}
 
-            {helperSubmitted ? (
+            {checkingPledge ? (
+              <ActivityIndicator color={theme.crimson} style={{ marginTop: spacing.md }} />
+            ) : helperSubmitted || hasPledged ? (
               <Card style={[styles.confirm, { backgroundColor: theme.tealLight, borderColor: theme.teal }]}>
                 <Text style={[styles.confirmText, { color: theme.teal }]}>
-                  ✓ Notified requester. Helper: {helperFullName ?? '—'} · {helperContactNumber ?? '—'}
+                  ✓ You already pledged to help this request
                 </Text>
               </Card>
             ) : (
-              <Button
-                label="I Can Help"
-                onPress={() => setHelperModalVisible(true)}
-                style={{ marginTop: spacing.md }}
-                fullWidth
-              />
+              profile && relatedRequest && canDonateTo(profile.bloodType, relatedRequest.bloodTypeNeeded) ? (
+                <Button
+                  label="I Can Help"
+                  onPress={() => setHelperModalVisible(true)}
+                  style={{ marginTop: spacing.md }}
+                  fullWidth
+                />
+              ) : (
+                <View style={[styles.incompatibleNotice, { backgroundColor: isDarkMode ? 'rgba(0,0,0,0.2)' : 'rgba(0,0,0,0.03)' }]}>
+                  <Text style={[styles.incompatibleText, { color: theme.inkMuted }]}>
+                    Blood type {profile?.bloodType ?? '?'} is not compatible with {relatedRequest?.bloodTypeNeeded}
+                  </Text>
+                </View>
+              )
             )}
           </Card>
         )}
@@ -115,7 +159,7 @@ export default function CommunityPostDetailScreen() {
         <HelperRegistrationModal
           visible={helperModalVisible}
           onClose={() => setHelperModalVisible(false)}
-          requesterLabel={`${post?.title ?? 'this request'} • ${relatedRequest?.hospital ?? ''}`}
+          requesterLabel={`${displayPost?.title ?? 'this request'} • ${relatedRequest?.hospital ?? ''}`}
           onSubmitted={async (payload) => {
             if (!relatedRequest) return;
 
@@ -129,6 +173,23 @@ export default function CommunityPostDetailScreen() {
             if (error) {
               showToast({ type: 'error', title: 'Failed to submit', message: error });
               return;
+            }
+
+            // Send email confirmation
+            if (payload.email) {
+              try {
+                await supabase.functions.invoke('send-help-confirmation', {
+                  body: {
+                    donor_email: payload.email,
+                    donor_name: payload.fullName,
+                    blood_type: relatedRequest.bloodTypeNeeded,
+                    hospital: relatedRequest.hospital,
+                    units_needed: relatedRequest.unitsNeeded,
+                  },
+                });
+              } catch (emailErr) {
+                console.log('Email notification skipped:', emailErr);
+              }
             }
 
             setHelperSubmitted(true);
@@ -185,4 +246,17 @@ const styles = StyleSheet.create({
   reqStat: { ...typography.h1, fontSize: 24 },
   confirm: { marginTop: spacing.md },
   confirmText: { ...typography.bodyStrong, textAlign: 'center' },
+  incompatibleNotice: {
+    marginTop: spacing.md,
+    padding: spacing.md,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: 'rgba(0,0,0,0.1)',
+  },
+  incompatibleText: {
+    ...typography.caption,
+    textAlign: 'center',
+  },
 });

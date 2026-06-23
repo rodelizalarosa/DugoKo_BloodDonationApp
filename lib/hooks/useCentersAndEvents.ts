@@ -45,10 +45,15 @@ export function useCentersAndEvents() {
       contactNumber?: string,
       declHealthy?: boolean,
       declNoMeds14d?: boolean,
-      declConsent?: boolean
+      declConsent?: boolean,
+      donorEmail?: string,
+      donorName?: string,
+      eventTitle?: string,
+      eventVenue?: string
     ): Promise<{ error: string | null }> => {
       if (!userId) return { error: 'Not authenticated' };
 
+      // First, insert/update RSVP record
       const { error: upsertError } = await supabase
         .from('event_rsvp')
         .upsert(
@@ -69,7 +74,35 @@ export function useCentersAndEvents() {
         return { error: upsertError.message };
       }
 
+      // Decrement slots in the events table using RPC
+      const { error: decrementError } = await supabase.rpc('decrement_event_slots', {
+        p_event_id: eventId,
+      });
+
+      if (decrementError) {
+        console.log('Slot decrement error (may already be 0):', decrementError.message);
+      }
+
+      // Refresh events to get updated slot count
       await fetchData();
+
+      // Send email confirmation if email provided
+      if (!decrementError && donorEmail && donorName && eventTitle && eventVenue) {
+        try {
+          await supabase.functions.invoke('send-event-confirmation', {
+            body: {
+              donor_email: donorEmail,
+              donor_name: donorName,
+              event_title: eventTitle,
+              event_venue: eventVenue,
+              time_slot: timeSlot,
+            },
+          });
+        } catch (emailErr) {
+          console.log('Event email notification skipped:', emailErr);
+        }
+      }
+
       return { error: null };
     },
     [userId, fetchData]

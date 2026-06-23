@@ -25,7 +25,9 @@ import React, {
   useEffect,
   useState,
 } from 'react';
+import * as SecureStore from 'expo-secure-store';
 import type { Session } from '@supabase/supabase-js';
+
 import { supabase } from '@/lib/supabase';
 import type { UpdateUserProfile, UserRow, UserRole } from '@/lib/supabase-types';
 
@@ -54,10 +56,8 @@ interface AuthContextType {
   resetPassword: (email: string) => Promise<{ error: string | null }>;
   updateProfile: (data: UpdateUserProfile) => Promise<{ error: string | null }>;
   refreshProfile: () => Promise<void>;
-
-  // ── OAuth stubs (wired after core backend is complete) ───────────
-  // signInWithGoogle:   () => Promise<{ error: string | null }>;
-  // signInWithFacebook: () => Promise<{ error: string | null }>;
+  hasSeenOnboarding: boolean;
+  markOnboardingComplete: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -66,7 +66,9 @@ const AuthContext = createContext<AuthContextType | null>(null);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<UserRow | null>(null);
+  const [hasSeenOnboarding, setHasSeenOnboarding] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState(true);
+
 
   const userRole = profile?.role ?? null;
   const isAdmin = profile?.role === 'admin';
@@ -123,14 +125,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // ── Restore session on mount, listen for changes ─────────────────
   useEffect(() => {
     // Attempt to restore persisted session from SecureStore
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      if (session?.user?.id) {
-        fetchProfile(session.user.id).finally(() => setIsLoading(false));
-      } else {
+    const initAuth = async () => {
+      try {
+        const onboardingVal = await SecureStore.getItemAsync('has_seen_onboarding');
+        setHasSeenOnboarding(onboardingVal === 'true');
+
+        const { data: { session } } = await supabase.auth.getSession();
+        setSession(session);
+        
+        if (session?.user?.id) {
+          await fetchProfile(session.user.id);
+        }
+      } catch (err) {
+        console.error('[Auth] Initialization error:', err);
+      } finally {
         setIsLoading(false);
       }
-    });
+    };
+
+    initAuth();
+
 
     // Listen for sign-in / sign-out / token refresh events
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
@@ -243,18 +257,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   /**
    * Sends a 6-digit OTP to the email for password recovery.
-   * Uses supabase.auth.signInWithOtp which routes through your custom SMTP.
+   * Uses supabase.auth.resend with type 'recovery' to send the "Recovery" email template.
    */
   const sendPasswordResetOtp = async (
     email: string
   ): Promise<{ error: string | null }> => {
-    const { error } = await supabase.auth.signInWithOtp({
+    const { error } = await supabase.auth.resend({
+      type: 'recovery',
       email,
-      options: {
-        // shouldCreateUser: false ensures we only send OTP to existing users.
-        // Set to true if you want auto-registration on OTP (not recommended for forgot-password).
-        shouldCreateUser: false,
-      },
     });
     return { error: error?.message ?? null };
   };
@@ -298,6 +308,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return { error: error?.message ?? null };
   };
 
+  const markOnboardingComplete = async () => {
+    try {
+      await SecureStore.setItemAsync('has_seen_onboarding', 'true');
+      setHasSeenOnboarding(true);
+    } catch (err) {
+      console.error('[Auth] Failed to save onboarding status:', err);
+    }
+  };
+
+
   // ── OAuth stubs (wire after core backend is complete) ─────────────
   // const signInWithGoogle = async (): Promise<{ error: string | null }> => {
   //   const { error } = await supabase.auth.signInWithOAuth({
@@ -332,9 +352,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         verifyOtp,
         updateProfile,
         refreshProfile,
+        hasSeenOnboarding,
+        markOnboardingComplete,
         // signInWithGoogle,
         // signInWithFacebook,
       }}
+
     >
       {children}
     </AuthContext.Provider>

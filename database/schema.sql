@@ -222,6 +222,19 @@ CREATE TABLE community_posts (
 );
 
 -- ─────────────────────────────────────────────
+-- NOTIFICATIONS
+-- ─────────────────────────────────────────────
+CREATE TABLE notifications (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  title       TEXT NOT NULL,
+  message     TEXT NOT NULL,
+  type        TEXT NOT NULL DEFAULT 'info',
+  is_read     BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- ─────────────────────────────────────────────
 -- Indexes
 -- ─────────────────────────────────────────────
 CREATE INDEX idx_donations_user_id   ON donations(user_id);
@@ -230,3 +243,34 @@ CREATE INDEX idx_events_date         ON events(date);
 CREATE INDEX idx_requests_status     ON blood_requests(status);
 CREATE INDEX idx_requests_urgency    ON blood_requests(urgency_level);
 CREATE INDEX idx_posts_posted_at     ON community_posts(posted_at DESC);
+CREATE INDEX idx_notifications_user  ON notifications(user_id);
+
+-- Functions
+-- ─────────────────────────────────────────────
+
+-- Function to decrement event slots (called on RSVP)
+CREATE OR REPLACE FUNCTION decrement_event_slots(p_event_id UUID)
+RETURNS VOID
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  UPDATE events
+  SET slots_available = slots_available - 1
+  WHERE id = p_event_id
+    AND slots_available > 0;
+END;
+$$;
+
+-- Function to increment event slots (called on RSVP cancellation)
+CREATE OR REPLACE FUNCTION increment_event_slots(p_event_id UUID)
+RETURNS VOID
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  UPDATE events
+  SET slots_available = slots_available + 1
+  WHERE id = p_event_id;
+END;
+$$;

@@ -144,7 +144,7 @@ export default function OtpScreen() {
     inputs.current[0]?.focus();
 
     let error: string | null = null;
-    if (type === 'email' || type === 'recovery') {
+    if (type === 'recovery') {
       const res = await sendPasswordResetOtp(email);
       error = res.error;
     } else {

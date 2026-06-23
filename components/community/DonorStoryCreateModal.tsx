@@ -29,7 +29,7 @@ export function DonorStoryCreateModal({
   }, [title, body]);
 
   const validationOk = Object.keys(errors).length === 0;
-  const submitEnabled = validationOk && requesterEligibility.status === 'eligible';
+  const submitEnabled = validationOk;
 
   const handleClose = () => {
     setTitle('');
@@ -41,7 +41,6 @@ export function DonorStoryCreateModal({
   const handleSubmit = () => {
     setTouched(true);
     if (!validationOk) return;
-    if (requesterEligibility.status !== 'eligible') return;
 
     onSubmitted({
       title: title.trim(),
@@ -61,16 +60,6 @@ export function DonorStoryCreateModal({
               Share your experience to encourage others.
             </Text>
 
-            {requesterEligibility.status !== 'eligible' && (
-              <View style={[styles.blockedBox, { borderColor: theme.border }]}>
-                <Text style={[styles.blockedTitle, { color: theme.crimson }]}>Posting is locked</Text>
-                <Text style={[styles.blockedText, { color: theme.inkMuted }]}>
-                  {requesterEligibility.status === 'deferred'
-                    ? `You’ll be eligible in ${requesterEligibility.daysRemaining ?? 0} days.`
-                    : 'You must be eligible (Red Cross health checks + donation eligibility) to post.'}
-                </Text>
-              </View>
-            )}
 
             <View style={styles.form}>
               <View style={styles.field}>
@@ -114,9 +103,14 @@ export function DonorStoryCreateModal({
                 ) : null}
               </View>
 
-              <Button label="Submit story" onPress={handleSubmit} disabled={!submitEnabled} fullWidth />
-              <View style={{ height: spacing.sm }} />
-              <Button label="Cancel" variant="outline" onPress={handleClose} fullWidth />
+              <View style={styles.buttonRow}>
+                <View style={styles.buttonWrapper}>
+                  <Button label="Cancel" variant="outline" onPress={handleClose} fullWidth />
+                </View>
+                <View style={styles.buttonWrapper}>
+                  <Button label="Submit story" onPress={handleSubmit} disabled={!submitEnabled} fullWidth />
+                </View>
+              </View>
             </View>
           </View>
         </ScrollView>
@@ -137,7 +131,8 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     padding: spacing.lg,
     gap: spacing.md,
-    maxHeight: '90%',
+    minHeight: 450,
+    maxHeight: '92%',
   },
   title: { ...typography.h2, fontWeight: '900' },
   subtitle: { ...typography.caption, lineHeight: 16 },
@@ -160,4 +155,6 @@ const styles = StyleSheet.create({
   },
   blockedTitle: { ...typography.bodyStrong, fontWeight: '900' },
   blockedText: { ...typography.caption, lineHeight: 16 },
+  buttonRow: { flexDirection: 'row', gap: spacing.md, marginTop: spacing.sm },
+  buttonWrapper: { flex: 1 },
 });

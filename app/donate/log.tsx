@@ -140,6 +140,9 @@ export default function LogDonationScreen() {
 
   const requiredFilled = !!date && venue.trim() && branch.trim();
 
+  // For demo: any upload gets verified immediately (bypass strict verification)
+  const isUploadProvided = !!uploadedFile;
+
   const handleSimulateUpload = () => {
     if (uploadedFile || isUploading) return;
     setIsUploading(true);
@@ -164,8 +167,9 @@ export default function LogDonationScreen() {
 
   async function handleSave() {
     if (!date) return;
-    
-    const isVerified = !!(donorId.trim() && bagRef.trim() && uploadedFile);
+
+    // For demo: verify immediately when upload is provided (bypass strict verification for demo)
+    const isVerified = isUploadProvided;
 
     const { error: saveError, donationId } = await logDonation({
       date: formatIsoDate(date),
@@ -197,10 +201,7 @@ export default function LogDonationScreen() {
         : 'Self-log saved. Pending PRC verification.',
     });
 
-    router.replace({
-      pathname: '/donate/receipt',
-      params: donationId ? { id: donationId } : {},
-    });
+    router.replace(donationId ? '/donate/receipt?id=' + donationId : '/donate/receipt');
   }
 
   return (

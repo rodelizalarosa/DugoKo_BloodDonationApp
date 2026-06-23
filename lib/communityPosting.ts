@@ -46,14 +46,42 @@ export function parseNeededByInput(input: string): string | null {
   return parsed.date ? parsed.date.toISOString() : null;
 }
 
-export function deriveTriageFromNeededWhen(neededWhenInput: string): TriageResult {
+export function deriveTriage(neededWhenInput: string, reasonInput: string): TriageResult {
   const parsed = normalizeDateInput(neededWhenInput);
+  const reason = reasonInput.toLowerCase();
   const now = new Date();
+
+  // 1. Critical cases: Surgeries or "today"
+  if (reason.includes('surgery') || reason.includes('operation') || neededWhenInput.toLowerCase() === 'today' || neededWhenInput.toLowerCase() === 'now') {
+    return {
+      urgencyLevel: 'critical',
+      triageLabel: 'Critical — immediate action',
+      triageReason: reason.includes('surgery') ? 'Medical procedure (surgery/operation) noted.' : 'Needed today/now.',
+    };
+  }
+
+  // 2. Urgent cases: "as soon as possible"
+  if (reason.includes('asap') || reason.includes('soon') || reason.includes('urgent')) {
+    return {
+      urgencyLevel: 'urgent',
+      triageLabel: 'Urgent — as soon as possible',
+      triageReason: 'Requester indicated immediate need (ASAP).',
+    };
+  }
+
+  // 3. Pledge cases: Dialysis or weekly need
+  if (reason.includes('dialysis') || reason.includes('weekly') || neededWhenInput.toLowerCase().includes('week')) {
+     return {
+      urgencyLevel: 'moderate',
+      triageLabel: 'Pledge — scheduled support',
+      triageReason: reason.includes('dialysis') ? 'Ongoing support for dialysis.' : 'Needed within the week.',
+    };
+  }
 
   const fallback: TriageResult = {
     urgencyLevel: 'moderate',
     triageLabel: 'Moderate urgency',
-    triageReason: 'Unable to interpret needed date; defaulting to moderate urgency.',
+    triageReason: 'General request; no immediate complications noted.',
   };
 
   if (!parsed.date) return fallback;
@@ -62,42 +90,15 @@ export function deriveTriageFromNeededWhen(neededWhenInput: string): TriageResul
   const diffMs = needed.getTime() - now.getTime();
   const diffHours = diffMs / (1000 * 60 * 60);
 
-  // If needed date is in the past or within the next few hours -> critical
-  if (diffHours <= 6) {
-    return {
-      urgencyLevel: 'critical',
-      triageLabel: 'Critical — needed very soon',
-      triageReason: parsed.isRelative
-        ? 'Needed time is within the next few hours.'
-        : 'Needed date/time is within the next 6 hours.',
-    };
-  }
-
-  // Within 24 hours -> urgent
   if (diffHours <= 24) {
     return {
       urgencyLevel: 'urgent',
-      triageLabel: 'Urgent — needed today/tomorrow',
-      triageReason: parsed.isRelative
-        ? 'Needed time indicates within 24 hours.'
-        : 'Needed date/time is within the next 24 hours.',
+      triageLabel: 'Urgent — needed within 24h',
+      triageReason: 'Needed date is within 24 hours.',
     };
   }
 
-  // Within ~3 days -> moderate
-  if (diffHours <= 72) {
-    return {
-      urgencyLevel: 'moderate',
-      triageLabel: 'Moderate — planned soon',
-      triageReason: 'Needed date/time is within the next 3 days.',
-    };
-  }
-
-  return {
-    urgencyLevel: 'moderate',
-    triageLabel: 'Planned — not immediately urgent',
-    triageReason: 'Needed date/time is more than 3 days away.',
-  };
+  return fallback;
 }
 
 export function coerceUnits(unitsInput: string): number | null {
@@ -116,6 +117,7 @@ export type BloodRequestDraft = {
   bloodTypeNeeded: BloodType | null;
   unitsNeeded: number | null;
   neededWhenInput: string;
+  reasonForRequest: string;
   additionalPatientInfo?: string;
   additionalNotes?: string;
 };
@@ -144,7 +146,10 @@ export function validateBloodRequestDraft(draft: BloodRequestDraft): BloodReques
     errors.neededWhenInput = 'Use today, tomorrow, or a valid date/time.';
   }
 
-  const triage = deriveTriageFromNeededWhen(neededWhen);
+  const reason = draft.reasonForRequest.trim();
+  if (!reason) errors.reasonForRequest = 'Reason for request is required.';
+
+  const triage = deriveTriage(neededWhen, draft.reasonForRequest);
   const ok = Object.keys(errors).length === 0;
 
   return { ok, errors, triage };

@@ -6,12 +6,17 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button } from '@/components/ui/Button';
 import { spacing, typography } from '@/constants/theme';
 import { useTheme } from '@/context/ThemeContext';
+import { useAuth } from '@/context/AuthContext';
+
 
 export default function SplashScreen() {
   const router = useRouter();
   const { theme } = useTheme();
+  const { isLoading, hasSeenOnboarding, markOnboardingComplete } = useAuth();
+  
   const fadeAnim = new Animated.Value(0);
   const slideAnim = new Animated.Value(20);
+
 
   useEffect(() => {
     Animated.parallel([
@@ -27,6 +32,16 @@ export default function SplashScreen() {
       }),
     ]).start();
   }, []);
+
+  const handleGetStarted = async () => {
+    await markOnboardingComplete();
+    router.push('/auth/login');
+  };
+
+  // Skip rendering actions if we are still determining the user's state
+  // or if they have already seen the onboarding (they will be redirected by AuthGate).
+  const showActions = !isLoading && !hasSeenOnboarding;
+
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.paper }]}>
@@ -48,16 +63,19 @@ export default function SplashScreen() {
           <Text style={[styles.tagline, { color: theme.inkMuted }]}>Every drop is a lifeline.</Text>
         </Animated.View>
 
-        <Animated.View style={[styles.actions, { opacity: fadeAnim }]}>
-          <Button 
-            label="Get Started" 
-            onPress={() => router.push('/auth/login')} 
-            fullWidth 
-          />
-          <Text style={[styles.footerText, { color: theme.inkFaint }]}>
-            Your Blood. Your Community. Your Impact.
-          </Text>
-        </Animated.View>
+        {showActions && (
+          <Animated.View style={[styles.actions, { opacity: fadeAnim }]}>
+            <Button 
+              label="Get Started" 
+              onPress={handleGetStarted} 
+              fullWidth 
+            />
+            <Text style={[styles.footerText, { color: theme.inkFaint }]}>
+              Your Blood. Your Community. Your Impact.
+            </Text>
+          </Animated.View>
+        )}
+
       </View>
     </SafeAreaView>
   );

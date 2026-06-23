@@ -47,10 +47,7 @@ export default function ForgotPasswordScreen() {
       setErrorMsg(error);
     } else {
       showToast({ type: 'success', title: 'OTP Sent', message: 'An 8-digit code has been sent to your email.' });
-      router.push({
-        pathname: '/auth/otp',
-        params: { email: email.trim().toLowerCase(), type: 'email' },
-      });
+      router.push('/auth/otp?email=' + encodeURIComponent(email.trim().toLowerCase()) + '&type=recovery');
     }
   };
 
@@ -67,7 +64,7 @@ export default function ForgotPasswordScreen() {
           <Mail size={48} color={theme.crimson} />
         </View>
 
-        <Text style={[styles.title, { color: theme.ink }]}>Forgot Password?</Text>
+        <Text style={[styles.title, { color: theme.ink }]}>Forgot Password</Text>
         <Text style={[styles.subtitle, { color: theme.inkMuted }]}>
           Enter your registered email and we will send an 8-digit OTP via email. Use it to reset
           your password, and resend the code if needed.

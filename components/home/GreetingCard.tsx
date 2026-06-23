@@ -1,7 +1,7 @@
 import { useRouter } from 'expo-router';
 import { ArrowRight, BadgeInfo, Droplets, IdCard } from 'lucide-react-native';
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Card } from '@/components/ui/Card';
 import { radius, spacing, typography } from '@/constants/theme';
 import { useTheme } from '@/context/ThemeContext';
@@ -37,20 +37,17 @@ export function GreetingCard({ user }: { user: User }) {
 
   const fullName = [user.firstName, user.middleName, user.lastName].filter(Boolean).join(' ');
   const initials = `${user.firstName?.[0] ?? ''}${user.lastName?.[0] ?? ''}`.toUpperCase() || 'U';
-  const statusLabel = user.profileComplete
-    ? user.eligibilityStatus === 'eligible'
-      ? 'Eligible'
-      : user.eligibilityStatus === 'deferred'
-        ? 'Deferred'
-        : 'Eligibility Not Checked'
-    : 'Profile Incomplete';
 
   return (
     <Card style={[styles.card, { borderColor: theme.border, backgroundColor: theme.surface }]}>
       <View style={styles.topRow}>
-        <View style={[styles.avatar, { backgroundColor: theme.crimson }]}>
-          <Text style={[styles.avatarText, { color: '#FFF' }]}>{initials}</Text>
-        </View>
+        {user.avatarUrl ? (
+          <Image source={{ uri: user.avatarUrl }} style={[styles.avatarImage, { backgroundColor: theme.crimsonLight }]} />
+        ) : (
+          <View style={[styles.avatar, { backgroundColor: theme.crimson }]}>
+            <Text style={[styles.avatarText, { color: '#FFF' }]}>{initials}</Text>
+          </View>
+        )}
 
         <View style={{ flex: 1 }}>
           <View style={styles.badgeRow}>
@@ -61,10 +58,6 @@ export function GreetingCard({ user }: { user: User }) {
           <Text style={[styles.name, { color: theme.inkMuted }]} numberOfLines={1}>
             {fullName || 'Your profile'}
           </Text>
-        </View>
-
-        <View style={[styles.statusPill, { backgroundColor: theme.crimsonLight }]}>
-          <Text style={[styles.statusText, { color: theme.crimson }]}>{statusLabel}</Text>
         </View>
       </View>
 
@@ -87,11 +80,6 @@ export function GreetingCard({ user }: { user: User }) {
               : 'Complete your profile to unlock donation guidance and matching.'}
           </Text>
         </View>
-
-        <Pressable onPress={() => router.push('/profile/edit')} style={styles.linkBtn}>
-          <Text style={[styles.linkText, { color: theme.crimson }]}>View Profile</Text>
-          <ArrowRight size={14} color={theme.crimson} />
-        </Pressable>
       </View>
     </Card>
   );
@@ -115,6 +103,11 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  avatarImage: {
+    width: 56,
+    height: 56,
+    borderRadius: radius.md,
   },
   avatarText: {
     ...typography.h1,

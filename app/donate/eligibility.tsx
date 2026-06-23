@@ -123,10 +123,7 @@ export default function EligibilityCheckerScreen() {
                     variant="outline"
                     onPress={() => {
                       if (params.helpRequestId) {
-                        router.replace({
-                          pathname: '/(tabs)',
-                          params: { helpRequestId: params.helpRequestId },
-                        });
+                        router.replace('/(tabs)?helpRequestId=' + params.helpRequestId);
                         return;
                       }
                       router.push('/donate/centers');

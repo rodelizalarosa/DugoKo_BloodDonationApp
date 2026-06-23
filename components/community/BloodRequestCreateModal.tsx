@@ -6,7 +6,7 @@ import { radius, spacing, typography } from '@/constants/theme';
 import {
   BloodRequestDraft,
   BloodRequestFormValidation,
-  deriveTriageFromNeededWhen,
+  deriveTriage,
   parseNeededByInput,
   validateBloodRequestDraft,
   coerceUnits,
@@ -90,6 +90,7 @@ export function BloodRequestCreateModal({
     bloodTypeNeeded: null,
     unitsNeeded: null,
     neededWhenInput: 'today',
+    reasonForRequest: '',
     additionalPatientInfo: '',
     additionalNotes: '',
   });
@@ -97,7 +98,7 @@ export function BloodRequestCreateModal({
   const [touched, setTouched] = useState(false);
 
   const validation: BloodRequestFormValidation = useMemo(() => validateBloodRequestDraft(draft), [draft]);
-  const triage = validation.triage ?? deriveTriageFromNeededWhen(draft.neededWhenInput);
+  const triage = validation.triage ?? deriveTriage(draft.neededWhenInput, draft.reasonForRequest);
 
   const reset = () => {
     setDraft({
@@ -106,6 +107,7 @@ export function BloodRequestCreateModal({
       bloodTypeNeeded: null,
       unitsNeeded: null,
       neededWhenInput: 'today',
+      reasonForRequest: '',
       additionalPatientInfo: '',
       additionalNotes: '',
     });
@@ -117,7 +119,7 @@ export function BloodRequestCreateModal({
     onClose();
   };
 
-  const submitEnabled = validation.ok && requesterEligibility.status === 'eligible';
+  const submitEnabled = validation.ok;
 
   const toggleBloodType = (t: BloodType) => {
     setDraft((d) => ({ ...d, bloodTypeNeeded: d.bloodTypeNeeded === t ? null : t }));
@@ -131,7 +133,6 @@ export function BloodRequestCreateModal({
   const handleSubmit = () => {
     setTouched(true);
     if (!validation.ok) return;
-    if (requesterEligibility.status !== 'eligible') return;
     if (!draft.bloodTypeNeeded || !draft.unitsNeeded) return;
 
     const title = `${triage.urgencyLevel === 'critical' ? 'Critical' : triage.urgencyLevel === 'urgent' ? 'Urgent' : 'Request'}: ${
@@ -173,19 +174,8 @@ export function BloodRequestCreateModal({
           <View style={[styles.modal, { backgroundColor: theme.surface, borderColor: theme.border }]}>
             <Text style={[styles.title, { color: theme.ink }]}>Create blood request</Text>
             <Text style={[styles.subtitle, { color: theme.inkMuted }]}>
-              Required fields are marked; urgency is derived from when blood is needed.
+              Required fields are marked; urgency is derived from reasons like surgery or dialysis.
             </Text>
-
-            {requesterEligibility.status !== 'eligible' && (
-              <View style={[styles.blockedBox, { borderColor: theme.border }]}>
-                <Text style={[styles.blockedTitle, { color: theme.crimson }]}>Posting is not available</Text>
-                <Text style={[styles.blockedText, { color: theme.inkMuted }]}>
-                  {requesterEligibility.status === 'deferred'
-                    ? `You’ll be eligible in ${requesterEligibility.daysRemaining ?? 0} days.`
-                    : 'You are not eligible to post right now.'}
-                </Text>
-              </View>
-            )}
 
             <View style={styles.form}>
               <Field
@@ -244,7 +234,20 @@ export function BloodRequestCreateModal({
                 <TextInput
                   value={draft.neededWhenInput}
                   onChangeText={(t) => setDraft((d) => ({ ...d, neededWhenInput: t }))}
-                  placeholder="e.g., today, tomorrow, 2026-06-21"
+                  placeholder="e.g., today, tomorrow, or a date"
+                  placeholderTextColor={theme.inkFaint}
+                  style={[styles.input, { color: theme.ink, backgroundColor: theme.paper, borderColor: theme.border }]}
+                />
+              </Field>
+
+              <Field
+                label="Reason for request (required) e.g., surgery, dialysis"
+                error={touched ? (validation.errors as any).reasonForRequest : undefined}
+              >
+                <TextInput
+                  value={draft.reasonForRequest}
+                  onChangeText={(t) => setDraft((d) => ({ ...d, reasonForRequest: t }))}
+                  placeholder="e.g., Emergency surgery, Dialysis support"
                   placeholderTextColor={theme.inkFaint}
                   style={[styles.input, { color: theme.ink, backgroundColor: theme.paper, borderColor: theme.border }]}
                 />
@@ -278,9 +281,14 @@ export function BloodRequestCreateModal({
                 />
               </Field>
 
-              <Button label="Submit request" onPress={handleSubmit} disabled={!submitEnabled} fullWidth />
-              <View style={{ height: spacing.sm }} />
-              <Button label="Cancel" variant="outline" onPress={handleClose} fullWidth />
+              <View style={styles.buttonRow}>
+                <View style={styles.buttonWrapper}>
+                  <Button label="Cancel" variant="outline" size="small" onPress={handleClose} fullWidth />
+                </View>
+                <View style={styles.buttonWrapper}>
+                  <Button label="Submit" size="small" onPress={handleSubmit} disabled={!submitEnabled} fullWidth />
+                </View>
+              </View>
             </View>
           </View>
         </ScrollView>
@@ -295,13 +303,17 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.35)',
     justifyContent: 'flex-end',
   },
-  modalInner: { padding: spacing.lg },
+  modalInner: {
+    padding: spacing.lg,
+    paddingBottom: spacing.xxl * 2,
+  },
   modal: {
     borderWidth: 1,
-    borderRadius: radius.lg,
+    borderRadius: radius.xxl,
     padding: spacing.lg,
     gap: spacing.md,
-    maxHeight: '90%',
+    minHeight: 950,
+    maxHeight: '95%',
   },
   title: { ...typography.h2, fontWeight: '900' },
   subtitle: { ...typography.caption, lineHeight: 16 },
@@ -331,4 +343,6 @@ const styles = StyleSheet.create({
   blockedBox: { borderWidth: 1, borderRadius: radius.md, padding: spacing.md, gap: spacing.xs },
   blockedTitle: { ...typography.bodyStrong },
   blockedText: { ...typography.caption, lineHeight: 16 },
+  buttonRow: { flexDirection: 'row', gap: spacing.md, marginTop: spacing.sm },
+  buttonWrapper: { flex: 1 },
 });

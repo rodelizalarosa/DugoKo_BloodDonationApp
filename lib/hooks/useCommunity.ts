@@ -30,8 +30,29 @@ export function useCommunity() {
     } else if (requestsRes.error) {
       setError(requestsRes.error.message);
     } else {
-      setPosts((postsRes.data ?? []).map(mapCommunityPost));
-      setRequests((requestsRes.data ?? []).map(mapBloodRequest));
+      const mappedPosts = (postsRes.data ?? []).map(mapCommunityPost);
+      const mappedRequests = (requestsRes.data ?? []).map(mapBloodRequest);
+      
+      // Identify requests that DON'T have a corresponding community post
+      const orphanedRequests = mappedRequests.filter(req => 
+        !mappedPosts.some(post => post.relatedRequestId === req.id)
+      );
+
+      // Create synthetic posts for orphaned requests
+      const syntheticPosts: CommunityPost[] = orphanedRequests.map(req => ({
+        id: `synth-${req.id}`,
+        type: 'request',
+        authorName: 'System', // Or could fetch creator name if needed
+        title: `Urgent Request: ${req.bloodTypeNeeded} at ${req.hospital}`,
+        body: req.notes || `A request for ${req.bloodTypeNeeded} blood was created directly in the database.`,
+        postedAt: req.postedAt,
+        relatedRequestId: req.id
+      }));
+
+      setPosts([...mappedPosts, ...syntheticPosts].sort((a, b) => 
+        new Date(b.postedAt).getTime() - new Date(a.postedAt).getTime()
+      ));
+      setRequests(mappedRequests);
     }
     setIsLoading(false);
   }, []);

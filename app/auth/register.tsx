@@ -138,10 +138,7 @@ export default function RegisterScreen() {
     showToast({ type: 'success', title: 'Account Created', message: 'A verification code has been sent to your email.' });
 
     // Success → go to OTP verification
-    router.push({
-      pathname: '/auth/otp',
-      params: { email: form.email.trim().toLowerCase(), type: 'signup' },
-    });
+    router.push('/auth/otp?email=' + encodeURIComponent(form.email.trim().toLowerCase()) + '&type=signup');
   };
 
   const update = (field: keyof typeof form) => (value: string) => {

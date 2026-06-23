@@ -23,6 +23,33 @@ VALUES
     123.8946, 
     '(032) 253-9891', 
     '8:00 AM – 4:00 PM, Daily'
+  ),
+  (
+    'c3000000-0000-0000-0000-000000000003',
+    'DOH Subnational Blood Center for Visayas',
+    'M.C. Briones St, Mandaue City',
+    10.3312,
+    123.9431,
+    '(032) 505-7090',
+    '8:00 AM – 5:00 PM, Mon–Fri'
+  ),
+  (
+    'c4000000-0000-0000-0000-000000000004',
+    'Chong Hua Hospital Blood Bank',
+    'Don Mariano Cui St, Cebu City',
+    10.3098,
+    123.8925,
+    '(032) 255-8000',
+    '24/7, Open Daily'
+  ),
+  (
+    'c5000000-0000-0000-0000-000000000005',
+    'Cebu Doctors'' University Hospital Blood Bank',
+    'Osmeña Blvd, Cebu City',
+    10.3125,
+    123.8907,
+    '(032) 255-5555',
+    '24/7, Open Daily'
   )
 ON CONFLICT (id) DO NOTHING;
 
@@ -58,6 +85,21 @@ VALUES
     10.3174,
     123.9056,
     'c1000000-0000-0000-0000-000000000001'
+  ),
+  (
+    'e3000000-0000-0000-0000-000000000003',
+    'Robinsons Galleria Cebu Blood Letting',
+    '2026-07-28',
+    '10:00 AM',
+    '4:00 PM',
+    'Robinsons Galleria Cebu, Level 2',
+    'Gen. Maxilom Ave, Cebu City',
+    'DOH Blood Center',
+    35,
+    'Join our community blood letting activity. All donors get a free health check.',
+    10.3055,
+    123.9095,
+    'c3000000-0000-0000-0000-000000000003'
   )
 ON CONFLICT (id) DO NOTHING;
 
@@ -207,5 +249,86 @@ VALUES
     5,
     '💭',
     'Donating blood does not make you weak long-term, you cannot contract a disease from donating since sterile single-use needles are used, and diabetics on stable oral medication can usually donate.'
+  ),
+  (
+    'a4000000-0000-0000-0000-000000000004',
+    'Blood Types: Who Can Donate To Whom?',
+    'Basics',
+    'Understanding blood type compatibility and matching.',
+    4,
+    '🩵',
+    'There are 8 blood types: A+, A-, B+, B-, AB+, AB-, O+, and O-. O- is the universal donor (can give to anyone). AB+ is the universal recipient (can receive from anyone). Type O+ donors can give to all positive types (A+, B+, AB+, O+). Type A- and B- can donate to their matching type and AB. Knowing your blood type helps you understand who you can help.'
+  ),
+  (
+    'a5000000-0000-0000-0000-000000000005',
+    'Blood Type Compatibility Chart',
+    'Basics',
+    'Quick reference for blood type matching.',
+    3,
+    '📊',
+    'O- can give to ALL types (universal donor). O+ can give to O+, A+, B+, AB+. A- can give to A-, A+, AB-, AB+. A+ can give to A+, AB+. B- can give to B-, B+, AB-, AB+. B+ can give to B+, AB+. AB- can give to AB-, AB+. AB+ can give to AB+ only.'
+  ),
+  (
+    'a6000000-0000-0000-0000-000000000006',
+    'Pre-Donation Checklist',
+    'Basics',
+    'What to do before and after donating blood.',
+    3,
+    '✅',
+    'Before donating: Get adequate sleep (at least 6 hours), eat a good meal (avoid fatty foods), stay hydrated with water or juice, bring valid ID. After donating: Rest for 15-20 minutes,eat and drink to recover, avoid heavy lifting for 5 hours, keep the bandage on for 4-6 hours.'
+  ),
+  (
+    'a7000000-0000-0000-0000-000000000007',
+    'Factors That Affect Blood Donation Eligibility',
+    'Health',
+    'Medical conditions that may prevent you from donating.',
+    5,
+    '⚕️',
+    'You may be deferred if you have: Fever or flu symptoms, low hemoglobin, certain chronic illnesses (some heart/liver/kidney conditions), recent tattoos or piercings (6 months), recent surgery (12 months), pregnancy or recently gave birth (6 months for normal delivery, 12 months for C-section). Certain medications may also defer you. A staff member will review your eligibility during screening.'
+  ),
+  (
+    'a8000000-0000-0000-0000-000000000008',
+    'How Often Can You Donate?',
+    'Basics',
+    'Understanding donation intervals and limits.',
+    3,
+    '📅',
+    'In the Philippines, male donors can give every 12 weeks (84 days), and female donors can give every 16 weeks (112 days) due to lower iron levels. Whole blood donation takes about 10-15 minutes. Your body replaces the plasma within 24-48 hours, and red blood cells within 4-6 weeks.'
+  ),
+  (
+    'a9000000-0000-0000-0000-000000000009',
+    'Is It Safe to Donate Blood?',
+    'Safety',
+    'Understanding the safety measures during donation.',
+    3,
+    '🛡️',
+    'Blood donation is very safe. New, sterile, single-use needles are used for each donor and immediately discarded after use. All equipment is FDA-approved. The screening process ensures donor safety. Less than 1% of donors experience any reaction, mostly minor dizziness that resolves quickly.'
+  ),
+  (
+    'a10000000-0000-0000-0000-000000000010',
+    'What is Apheresis?',
+    'Process',
+    'Learn about donating specific blood components.',
+    4,
+    '🧪',
+    'Apheresis is a method of collecting only specific blood components (platelets, plasma, or red cells) while returning the rest to the donor. Platelet apheresis takes about 90 minutes but can help more patients. Plasma donation takes about 45 minutes. You may be eligible to donate components even if not eligible for whole blood.'
+  ),
+  (
+    'a11000000-0000-0000-0000-000000000011',
+    'Benefits of Donating Blood',
+    'Health',
+    'Surprising health benefits for donors.',
+    3,
+    '❤️',
+    'Regular blood donation may reduce iron overload, improve cardiovascular health, and provide a free mini-health checkup. Studies show donating blood may lower the risk of certain cancers. Most importantly, your donation can save up to 3 lives! The greatest benefit is knowing you helped someone in need.'
+  ),
+  (
+    'a12000000-0000-0000-0000-000000000012',
+    'Common Donation Side Effects',
+    'Health',
+    'What to expect and how to handle reactions.',
+    3,
+    '🤕',
+    'Most donors feel fine. Minor side effects include: dizziness (can be prevented by eating and drinking), bruise at needle site (normal, fades in days), soreness (apply ice). Severe reactions are rare (<1%). If you feel unwell, tell staff immediately. Resting for 15 minutes and eating a snack usually helps.'
   )
 ON CONFLICT (id) DO NOTHING;

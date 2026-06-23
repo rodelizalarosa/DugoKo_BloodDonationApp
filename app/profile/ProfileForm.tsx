@@ -35,6 +35,8 @@ export default function ProfileForm({ mode }: { mode: Mode }) {
 
   const [bloodType, setBloodType] = useState<BloodType | null>(profile?.bloodType ?? null);
   const [weight, setWeight] = useState(profile?.weightKg ? `${profile.weightKg}` : '');
+  const [phone, setPhone] = useState(profile?.phone ?? '');
+
   const [touched, setTouched] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [selectedYear, setSelectedYear] = useState<number>(
@@ -105,10 +107,14 @@ export default function ProfileForm({ mode }: { mode: Mode }) {
     }
 
     const formattedBirthdate = `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}-${String(selectedDay).padStart(2, '0')}`;
+
+    const sanitizedPhone = phone.trim();
+
     const { error } = await updateProfile({
       blood_type: bloodType as any,
       birthdate: formattedBirthdate,
       weight_kg: weight ? parseFloat(weight) : null,
+      phone: sanitizedPhone || null,
       profile_complete: true,
     });
 
@@ -177,8 +183,24 @@ export default function ProfileForm({ mode }: { mode: Mode }) {
               keyboardType="email-address"
               autoCapitalize="none"
               style={[styles.input, { borderColor: theme.border, color: theme.inkMuted, backgroundColor: theme.paper }]}
+              placeholder="name@email.com"
+              placeholderTextColor={theme.inkFaint}
             />
           </View>
+
+          <View style={styles.field}>
+            <Text style={[styles.label, { color: theme.inkMuted }]}>Contact Number</Text>
+            <TextInput
+              value={phone}
+              editable={true}
+              keyboardType="phone-pad"
+              placeholder="e.g. 09XXXXXXXXX"
+              placeholderTextColor={theme.inkFaint}
+              style={[styles.input, { borderColor: theme.border, color: theme.ink, backgroundColor: theme.paper }]}
+              onChangeText={setPhone}
+            />
+          </View>
+
 
           <View style={styles.field}>
             <Text style={[styles.label, { color: theme.inkMuted }]}>Blood Type</Text>

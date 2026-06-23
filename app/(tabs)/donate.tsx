@@ -50,7 +50,7 @@ const actions = [
 export default function DonateScreen() {
   const router = useRouter();
   const { theme } = useTheme();
-  const { centers, events, isLoading } = useCentersAndEvents();
+  const { centers, events, isLoading, error } = useCentersAndEvents();
 
   const mapCenter = centers[0];
   const markers = centers.map((center) => ({
@@ -70,6 +70,11 @@ export default function DonateScreen() {
         </Text>
 
         <Card style={[styles.mapCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+          {error && (
+            <View style={{ padding: spacing.sm, backgroundColor: theme.crimsonLight, borderRadius: radius.sm, marginBottom: spacing.sm }}>
+              <Text style={[typography.caption, { color: theme.crimson }]}>Sync Error: {error}</Text>
+            </View>
+          )}
           <View style={styles.mapHeader}>
             <View>
               <Text style={[styles.sectionLabel, { color: theme.ink, marginTop: 0 }]}>Nearby Drives</Text>

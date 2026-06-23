@@ -7,8 +7,12 @@ import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { ToastProvider } from '@/context/ToastContext';
 
 function navigateSafe(router: ReturnType<typeof useRouter>, route: string) {
-  setTimeout(() => { try { router.replace(route as any); } catch {} }, 0);
+  setTimeout(() => {
+    router.replace(route as any);
+  }, 0);
 }
+
+
 
 /**
  * Guards the router based on auth state AND user role (RBAC).
@@ -24,7 +28,7 @@ function navigateSafe(router: ReturnType<typeof useRouter>, route: string) {
  *   - admin                 — admin panel screens
  */
 function AuthGate({ children }: { children: React.ReactNode }) {
-  const { session, profile, isLoading } = useAuth();
+  const { session, profile, isLoading, hasSeenOnboarding } = useAuth();
   const segments = useSegments();
   const router   = useRouter();
   const mounted  = useRef(false);
@@ -40,33 +44,61 @@ function AuthGate({ children }: { children: React.ReactNode }) {
     const inAuthGroup = currentRoot === 'auth';
     const inAdminGroup = currentRoot === 'admin';
 
+    // Screens that must NOT be redirected away during an auth/onboarding flow.
+    // In particular, /auth/register must be exempt, otherwise the user can be
+    // bounced to /profile/complete immediately after signup when a session exists.
     const isMidFlowScreen =
-      currentScreen === 'otp' ||
-      currentScreen === 'reset-password' ||
-      currentScreen === 'complete' ||
-      currentScreen === 'edit';
+      currentRoot === 'auth' &&
+      (currentScreen === 'login' ||
+        currentScreen === 'register' ||
+        currentScreen === 'forgot-password' ||
+        currentScreen === 'otp' ||
+        currentScreen === 'reset-password') ||
+      (currentRoot === 'profile' && currentScreen === 'complete') ||
+      (currentRoot === 'admin');
 
     const isOnProfileCompletion = currentRoot === 'profile' && currentScreen === 'complete';
     const isSplashScreen = segs.length === 0 || segs[0] === 'index' || segs[0] === '';
 
+
     if (!session) {
-      if (!inAuthGroup && !isSplashScreen) {
-        navigateSafe(router, '/auth/login');
+      // If no session exists:
+      if (hasSeenOnboarding) {
+        // Repeat user: Redirect to login if they are anywhere else
+        // (except if they are currently in the mid-flow of auth/reset)
+        if (!inAuthGroup) {
+          navigateSafe(router, '/auth/login');
+        }
+      } else {
+        // New user: Must see onboarding at `/` (index)
+        if (!isSplashScreen && !inAuthGroup) {
+          navigateSafe(router, '/');
+        }
       }
     } else {
+      // If session EXISTS:
       if (inAdminGroup && profile?.role === 'donor') {
         navigateSafe(router, '/(tabs)');
         return;
       }
 
-      if (inAuthGroup || isSplashScreen) {
-        if (!isMidFlowScreen) {
-          if (profile && !profile.profile_complete && !isOnProfileCompletion) {
-            navigateSafe(router, '/profile/complete');
-          } else {
-            navigateSafe(router, '/(tabs)');
-          }
+      // If user is on the Splash/Onboarding screen and ALREADY logged in,
+      // redirect them immediately to the appropriate home screen.
+      if (isSplashScreen) {
+        // We MUST wait for the profile row to load before deciding where to go
+        if (!profile) return;
+
+        if (profile.profile_complete) {
+          navigateSafe(router, '/(tabs)');
+        } else if (!isOnProfileCompletion) {
+          navigateSafe(router, '/profile/complete');
         }
+        return;
+      }
+
+      // Enforce profile completion for any authenticated user on a non-auth screen
+      if (!inAuthGroup && profile && !profile.profile_complete && !isOnProfileCompletion) {
+        navigateSafe(router, '/profile/complete');
       }
     }
   }, [session, profile, isLoading, segments]);

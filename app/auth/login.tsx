@@ -54,10 +54,7 @@ export default function LoginScreen() {
       if (error === 'EMAIL_NOT_REGISTERED') {
         setErrorMsg('Account not found');
       } else if (error === 'EMAIL_NOT_CONFIRMED') {
-        router.replace({
-          pathname: '/auth/otp',
-          params: { email: email.trim().toLowerCase(), type: 'signup' },
-        });
+        router.push('/auth/otp?email=' + encodeURIComponent(email.trim().toLowerCase()) + '&type=signup');
       } else if (error === 'INVALID_LOGIN_CREDENTIALS') {
         setErrorMsg('Incorrect password');
       } else {
@@ -65,6 +62,10 @@ export default function LoginScreen() {
       }
     } else {
       showToast({ type: 'success', title: 'Welcome Back!', message: 'You have logged in successfully.' });
+      // Leave auth stack so AuthGate can perform post-login redirects
+      // (e.g. profile completion or main tabs). Replacing avoids back-nav
+      // returning the user to the login screen.
+      router.replace('/');
     }
     // On success, AuthGate in _layout.tsx auto-navigates to /(tabs)
   };

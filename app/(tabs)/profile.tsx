@@ -1,11 +1,13 @@
 import { useRouter } from 'expo-router';
 import { Award, ChevronRight, Clock, FileText, LogOut, Settings, UserCog, Camera, Trash2, X, Shield } from 'lucide-react-native';
 import React, { useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View, Modal, TouchableOpacity } from 'react-native';
+import { ActivityIndicator, Alert, Image, Pressable, ScrollView, StyleSheet, Text, View, Modal, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Card } from '@/components/ui/Card';
 import { radius, spacing, typography } from '@/constants/theme';
 import { useTheme } from '@/context/ThemeContext';
+import * as ImagePicker from 'expo-image-picker';
+import { supabase } from '@/lib/supabase';
 
 // Role-based menu items: admin/moderator users get an extra Admin Panel entry
 function buildMenu(isAdminOrMod: boolean) {
@@ -36,10 +38,102 @@ import { useAuth } from '@/context/AuthContext';
 export default function ProfileScreen() {
   const router = useRouter();
   const { theme, isDarkMode } = useTheme();
-  const { profile, isLoading } = useProfile();
+  const { profile, isLoading, refresh } = useProfile();
   const { signOut, isAdmin, isModerator } = useAuth();
   const [showLevelModal, setShowLevelModal] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [uploading, setUploading] = useState(false);
+
+  const handleUploadImage = async () => {
+    if (!profile) return;
+
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Required', 'Please allow access to your photo library.');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      if (result.canceled || !result.assets?.[0]) return;
+
+      setUploading(true);
+      const asset = result.assets[0];
+
+      // Store only the local file URI/path (not actual image data)
+      const localImageUri = asset.uri;
+
+      // Update profile with local file path
+      const { error: updateError } = await supabase
+        .from('users')
+        .update({ avatar_url: localImageUri })
+        .eq('id', profile.id);
+
+      if (updateError) {
+        console.error('Update error:', updateError);
+        Alert.alert('Update Failed', 'Could not save image. Please try again.');
+        return;
+      }
+
+      // Refresh profile data to update the UI
+      await refresh();
+
+      Alert.alert('Success', 'Profile image updated!');
+    } catch (err) {
+      console.error('Error:', err);
+      Alert.alert('Error', 'An unexpected error occurred.');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleDeleteImage = async () => {
+    if (!profile || !profile.avatarUrl) return;
+
+    Alert.alert(
+      'Delete Profile Image',
+      'Are you sure you want to remove your profile image?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setUploading(true);
+
+              const { error } = await supabase
+                .from('users')
+                .update({ avatar_url: null })
+                .eq('id', profile.id);
+
+              if (error) {
+                console.error('Delete error:', error);
+                Alert.alert('Error', 'Could not delete image.');
+                return;
+              }
+
+              // Refresh profile data to update the UI
+              await refresh();
+
+              Alert.alert('Removed', 'Profile image has been removed.');
+            } catch (err) {
+              console.error('Error:', err);
+              Alert.alert('Error', 'An unexpected error occurred.');
+            } finally {
+              setUploading(false);
+            }
+          },
+        },
+      ]
+    );
+  };
 
   // ── Loading state ──────────────────────────────────────────────
   if (isLoading) {
@@ -73,16 +167,34 @@ export default function ProfileScreen() {
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.avatarWrap}>
           <View style={styles.avatarContainer}>
-            <View style={[styles.avatar, { backgroundColor: theme.crimson }]}>
-              <Text style={[styles.avatarInitial, { color: theme.surface }]}>{profile.firstName.charAt(0).toUpperCase()}</Text>
-            </View>
+            {profile.avatarUrl ? (
+              <Image source={{ uri: profile.avatarUrl }} style={[styles.avatarImage, { backgroundColor: theme.crimsonLight }]} />
+            ) : (
+              <View style={[styles.avatar, { backgroundColor: theme.crimson }]}>
+                <Text style={[styles.avatarInitial, { color: theme.surface }]}>{profile.firstName.charAt(0).toUpperCase()}</Text>
+              </View>
+            )}
             <View style={styles.avatarActions}>
-              <TouchableOpacity style={[styles.avatarActionBtn, { backgroundColor: theme.surface }]}>
-                <Camera size={16} color={theme.crimson} />
+              <TouchableOpacity
+                style={[styles.avatarActionBtn, { backgroundColor: theme.surface }]}
+                onPress={handleUploadImage}
+                disabled={uploading}
+              >
+                {uploading ? (
+                  <ActivityIndicator size={16} color={theme.crimson} />
+                ) : (
+                  <Camera size={16} color={theme.crimson} />
+                )}
               </TouchableOpacity>
-              <TouchableOpacity style={[styles.avatarActionBtn, { backgroundColor: theme.surface }]}>
-                <Trash2 size={16} color={theme.inkFaint} />
-              </TouchableOpacity>
+              {profile.avatarUrl && (
+                <TouchableOpacity
+                  style={[styles.avatarActionBtn, { backgroundColor: theme.surface }]}
+                  onPress={handleDeleteImage}
+                  disabled={uploading}
+                >
+                  <Trash2 size={16} color={theme.inkFaint} />
+                </TouchableOpacity>
+              )}
             </View>
           </View>
 
@@ -194,6 +306,8 @@ export default function ProfileScreen() {
                   onPress={async () => {
                     setShowLogoutModal(false);
                     await signOut();
+                    // Use setTimeout to let session clear before navigation
+                    setTimeout(() => router.replace('/auth/login'), 100);
                   }}
                   style={[styles.logoutBtn, styles.logoutBtnPrimary, { backgroundColor: theme.crimson }]}
                 >
@@ -234,6 +348,15 @@ const styles = StyleSheet.create({
     borderRadius: 50,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 4,
+    borderColor: '#FFF',
+    boxShadow: '0 4px 10px rgba(0, 0, 0, 0.1)',
+    elevation: 8,
+  },
+  avatarImage: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
     borderWidth: 4,
     borderColor: '#FFF',
     boxShadow: '0 4px 10px rgba(0, 0, 0, 0.1)',

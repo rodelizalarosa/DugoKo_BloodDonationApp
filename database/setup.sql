@@ -26,6 +26,7 @@ DROP TABLE IF EXISTS public.event_rsvp      CASCADE;
 DROP TABLE IF EXISTS public.events          CASCADE;
 DROP TABLE IF EXISTS public.centers         CASCADE;
 DROP TABLE IF EXISTS public.users           CASCADE;
+DROP TABLE IF EXISTS public.notifications   CASCADE;
 
 DROP TYPE IF EXISTS public.post_type           CASCADE;
 DROP TYPE IF EXISTS public.request_status      CASCADE;
@@ -156,6 +157,7 @@ CREATE TABLE donations (
   branch         TEXT NOT NULL,
   blood_bag_ref  TEXT,
   donor_id       TEXT,
+  status         TEXT NOT NULL DEFAULT 'Logged Donation',
   is_verified    BOOLEAN NOT NULL DEFAULT FALSE,
   verified_at    TIMESTAMPTZ,
   blood_pressure TEXT,
@@ -213,6 +215,17 @@ CREATE TABLE community_posts (
   posted_at          TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- NOTIFICATIONS
+CREATE TABLE notifications (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  title       TEXT NOT NULL,
+  message     TEXT NOT NULL,
+  type        TEXT NOT NULL DEFAULT 'info',
+  is_read     BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 -- INDEXES
 CREATE INDEX idx_donations_user_id   ON donations(user_id);
 CREATE INDEX idx_donations_date      ON donations(date);
@@ -221,6 +234,37 @@ CREATE INDEX idx_requests_status     ON blood_requests(status);
 CREATE INDEX idx_requests_urgency    ON blood_requests(urgency_level);
 CREATE INDEX idx_posts_related_request_id ON community_posts(related_request_id);
 CREATE INDEX idx_posts_posted_at     ON community_posts(posted_at DESC);
+CREATE INDEX idx_notifications_user_id ON notifications(user_id);
+
+-- FUNCTIONS
+-- ─────────────────────────────────────────────
+
+-- Function to decrement event slots (called on RSVP)
+CREATE OR REPLACE FUNCTION decrement_event_slots(p_event_id UUID)
+RETURNS VOID
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  UPDATE events
+  SET slots_available = slots_available - 1
+  WHERE id = p_event_id
+    AND slots_available > 0;
+END;
+$$;
+
+-- Function to increment event slots (called on RSVP cancellation)
+CREATE OR REPLACE FUNCTION increment_event_slots(p_event_id UUID)
+RETURNS VOID
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  UPDATE events
+  SET slots_available = slots_available + 1
+  WHERE id = p_event_id;
+END;
+$$;
 
 -- ─────────────────────────────────────────────
 -- 4. ROW LEVEL SECURITY
@@ -238,6 +282,7 @@ ALTER TABLE donor_insights     ENABLE ROW LEVEL SECURITY;
 ALTER TABLE faq                ENABLE ROW LEVEL SECURITY;
 ALTER TABLE learn_articles     ENABLE ROW LEVEL SECURITY;
 ALTER TABLE community_posts    ENABLE ROW LEVEL SECURITY;
+ALTER TABLE notifications      ENABLE ROW LEVEL SECURITY;
 
 -- Helper: check user role
 CREATE OR REPLACE FUNCTION public.user_has_role(required_role user_role)
@@ -443,6 +488,8 @@ AS $$
 DECLARE
   v_existing_id UUID;
   v_new_pledges INT;
+  v_requester_id UUID;
+  v_hospital TEXT;
   v_result JSONB;
 BEGIN
   SELECT id INTO v_existing_id
@@ -455,6 +502,20 @@ BEGIN
 
   INSERT INTO public.request_responses (request_id, user_id, helper_name, helper_contact, helper_email)
   VALUES (p_request_id, auth.uid(), p_helper_name, p_helper_contact, p_helper_email);
+
+  SELECT posted_by, hospital INTO v_requester_id, v_hospital
+  FROM public.blood_requests
+  WHERE id = p_request_id;
+
+  IF v_requester_id IS NOT NULL AND v_requester_id <> auth.uid() THEN
+    INSERT INTO public.notifications (user_id, title, message, type)
+    VALUES (
+      v_requester_id, 
+      'New Donor Response', 
+      COALESCE(p_helper_name, 'A donor') || ' has offered to help with your request at ' || v_hospital,
+      'request_response'
+    );
+  END IF;
 
   UPDATE public.blood_requests
   SET units_pledged = units_pledged + 1
@@ -554,6 +615,20 @@ CREATE POLICY "community_posts: update_delete" ON community_posts
   TO authenticated
   USING (auth.uid() = author_id OR user_has_role('moderator') OR user_has_role('admin'))
   WITH CHECK (auth.uid() = author_id OR user_has_role('moderator') OR user_has_role('admin'));
+
+-- NOTIFICATIONS
+CREATE POLICY "notifications: select" ON notifications
+  TO authenticated
+  USING (auth.uid() = user_id);
+
+CREATE POLICY "notifications: update" ON notifications
+  TO authenticated
+  USING (auth.uid() = user_id)
+  WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "notifications: insert" ON notifications
+  TO authenticated
+  WITH CHECK (true);
 
 -- ─────────────────────────────────────────────
 -- 5. TRIGGERS & FUNCTIONS
